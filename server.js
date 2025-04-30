@@ -11,6 +11,7 @@ const fs = require("fs-extra");
 const path = require("path");
 const sharp = require("sharp");
 const os = require("os"); // Import os module for temp directory
+const { log } = require("console");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -202,8 +203,7 @@ CopyGunning.belongsTo(Bagging, { foreignKey: "BagID", targetKey: "BagID" });
 
 
 
-
-
+//models for Testing database-
 // Define Sequelize Model for tbl_copy_pages
 const CopyPage = sequelize.define(
   "CopyPage",
@@ -308,6 +308,74 @@ const CopyAnnotation = sequelize.define(
     timestamps: false, // disable automatic timestamps   
   }
 );
+
+// Sequelize Model for copy_eval
+const CopyEval = sequelize.define(
+  "CopyEval",
+  {
+    sno: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true, // Auto-incrementing primary key
+    },
+    copyid: {
+      type: DataTypes.STRING(20),
+      allowNull: false, // Copy ID cannot be null
+    },
+    obt_mark: {
+      type: DataTypes.DECIMAL(5, 2), // Obtained marks
+      allowNull: true,
+    },
+    max_mark: {
+      type: DataTypes.DECIMAL(5, 2), // Maximum marks
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: "Not-Evaluated", // Default status
+    },
+    eval_time: {
+      type: DataTypes.STRING(50), // Evaluation time
+      allowNull: true,
+    },
+    eval_id: {
+      type: DataTypes.STRING(20), // Evaluator ID
+      allowNull: true,
+    },
+    reject_reason: {
+      type: DataTypes.STRING(255), // Reason for rejection
+      allowNull: true,
+    },
+    bag_id: {
+      type: DataTypes.STRING(20),
+      allowNull: false, // Bag ID cannot be null
+    },
+    del: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false, // Default value for deletion flag
+    },
+    createdat: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal("GETDATE()"), // Default to current date
+    },
+    updatedat: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal("GETDATE()"), // Default to current date
+    },
+  },
+  {
+    tableName: "copy_eval", // Specify the table name
+    timestamps: false, // Disable automatic timestamps
+  }
+);
+
+
+
+
 
 // Sync the models with the databases
 Promise.all([
@@ -639,53 +707,6 @@ app.get("/api/copies/image", authenticateToken, async (req, res) => {
   }
 });
 
-
-
-// Save annotations
-app.post("/api/annotations/save", authenticateToken, async (req, res) => {
-  try {
-    const { copyId, annotations, drawAnnotations } = req.body;
-    console.log("Received request to save annotations:", req.body);
-
-    // Validate required data
-    if (!copyId) {
-      return res.status(400).json({ error: "Copy ID is required" });
-    }
-
-    // Check if a record already exists for the given copyId
-    const existingRecord = await CopyAnnotation.findOne({
-      where: { copy_id: copyId },
-    });
-
-    if (existingRecord) {
-      // Update existing annotations
-      await existingRecord.update({
-        annotations: JSON.stringify(annotations || []),
-        draw_annotations: JSON.stringify(drawAnnotations || []),
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: "Annotations updated successfully",
-      });
-    }
-
-    // If no record exists, create a new one
-    await CopyAnnotation.create({
-      copy_id: copyId,
-      annotations: JSON.stringify(annotations || []),
-      draw_annotations: JSON.stringify(drawAnnotations || []),
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Annotations saved successfully",
-    });
-  } catch (error) {
-    console.error("Error saving annotations:", error);
-    res.status(500).json({ error: "Failed to save annotations" });
-  }
-});
 
 // Get annotations
 app.get("/api/annotations/:copyId", authenticateToken, async (req, res) => {
@@ -1596,6 +1617,98 @@ app.get("/api/copies/annotated", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error fetching annotated copies:", error.message);
     res.status(500).json({ error: "Failed to fetch annotated copies" });
+  }
+});
+
+
+//*API to save checked copy annotations
+// Save annotations
+app.post("/api/annotations/save", authenticateToken, async (req, res) => {
+  try {
+    const { copyId, annotations, drawAnnotations } = req.body;
+    console.log("Received request to save annotations:", req.body);
+
+    // Validate required data
+    if (!copyId) {
+      return res.status(400).json({ error: "Copy ID is required" });
+    }
+
+    // Check if a record already exists for the given copyId
+    const existingRecord = await CopyAnnotation.findOne({
+      where: { copy_id: copyId },
+    });
+
+    if (existingRecord) {
+      // Update existing annotations
+      await existingRecord.update({
+        annotations: JSON.stringify(annotations || []),
+        draw_annotations: JSON.stringify(drawAnnotations || []),
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Annotations updated successfully",
+      });
+    }
+
+    // If no record exists, create a new one
+    await CopyAnnotation.create({
+      copy_id: copyId,
+      annotations: JSON.stringify(annotations || []),
+      draw_annotations: JSON.stringify(drawAnnotations || []),
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Annotations saved successfully",
+    });
+  } catch (error) {
+    console.error("Error saving annotations:", error);
+    res.status(500).json({ error: "Failed to save annotations" });
+  }
+});
+
+//*(new) API to save checked copy info
+app.post("/api/evaluation/save", authenticateToken, async (req, res) => {
+  try {
+    const {
+      copyid,
+      obt_mark,
+      max_mark,
+      status,
+      eval_time,
+      eval_id,
+      reject_reason,
+      bag_id,
+    } = req.body;
+
+   console.log("Received request to save evaluation record:", req.body);
+
+    // Validate required fields
+    if (!copyid || !bag_id) {
+      return res.status(400).json({ error: "Copy ID and Bag ID are required" });
+    }
+
+    // Save the evaluation record
+    const newEval = await CopyEval.create({
+      copyid,
+      obt_mark,
+      max_mark,
+      status: status || "Not-Evaluated", // Default to 'Not-Evaluated' if not provided
+      eval_time,
+      eval_id,
+      reject_reason,
+      bag_id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Evaluation record saved successfully",
+      data: newEval,
+    });
+  } catch (error) {
+    console.error("Error saving evaluation record:", error.message);
+    res.status(500).json({ error: "Failed to save evaluation record" });
   }
 });
 
