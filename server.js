@@ -11,7 +11,6 @@ const fs = require("fs-extra");
 const path = require("path");
 const sharp = require("sharp");
 const os = require("os"); // Import os module for temp directory
-const { log } = require("console");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -407,11 +406,11 @@ Promise.all([
 
 
 
-// Example backend route to check authentication
+// backend route to check authentication
 
 app.get("/auth/check", (req, res) => {
   const token = req.cookies.authToken;
-
+  console.log("Received token:", token); // Log the received token
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -423,6 +422,8 @@ app.get("/auth/check", (req, res) => {
     res.status(401).json({ error: "Invalid or expired token" });
   }
 });
+
+
 
 // app.post("/login", async (req, res) => {
 //   const { uid, pass } = req.body;
@@ -477,6 +478,8 @@ app.get("/auth/check", (req, res) => {
 
 app.post("/login", async (req, res) => {
   const { uid, pass } = req.body;
+  console.log("uid pass", uid, pass);
+  
 
   if (!uid || !pass) {
     return res.status(400).json({ error: "User ID or Password missing" });
@@ -513,9 +516,12 @@ app.post("/login", async (req, res) => {
       httpOnly: true, // Prevent access via JavaScript
       secure: process.env.NODE_ENV === "production", // Use HTTPS in production
       sameSite: "strict", // Prevent CSRF
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      // maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 3 day
     });
 
+    console.log("Login successful, token set in cookie");
+    
     return res.status(200).json({ message: "Login successful", userData });
   } catch (error) {
     console.error(error);
@@ -572,7 +578,8 @@ app.post("/register", async (req, res) => {
       httpOnly: true, // Prevent access via JavaScript
       secure: process.env.NODE_ENV === "production", // Use HTTPS in production
       sameSite: "strict", // Prevent CSRF
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      // maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 3 day
     });
 
     // Return success response with user data
@@ -1553,6 +1560,7 @@ app.post("/api/copies/subject", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch copies by subject" });
   }
 });
+
 // Search and filter copies
 app.get("/api/copies/search", async (req, res) => {
   try {
@@ -1679,7 +1687,7 @@ app.post("/api/evaluation/save", authenticateToken, async (req, res) => {
       eval_time,
       eval_id,
       reject_reason,
-      bag_id,
+      bag_id='test',
     } = req.body;
 
    console.log("Received request to save evaluation record:", req.body);
@@ -1709,6 +1717,109 @@ app.post("/api/evaluation/save", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error saving evaluation record:", error.message);
     res.status(500).json({ error: "Failed to save evaluation record" });
+  }
+});
+
+//* API to reject a copy..
+app.post("/api/copy/reject", authenticateToken, async (req, res) => {
+  const { copyId, reason, userId, bagId, copyStatus = "Rejected" } = req.body;
+
+  console.log("Received request to reject copy:", req.body);
+
+  // Validate required fields
+  if (!copyId || !reason || !userId || !bagId || !copyStatus) {
+    return res.status(400).json({
+      error: "Copy ID, reason, user ID, Bag ID, and copy status are required",
+    });
+  }
+
+  try {
+    // Check if the copy has already been rejected
+    const existingRecord = await CopyEval.findOne({ where: { copyid: copyId } });
+    if (existingRecord) {
+      return res.status(409).json({
+        error: "A record for this Copy ID already exists",
+      });
+    }
+
+    // Create a new record in the CopyEval table for the rejected copy
+    const response = await CopyEval.create({
+      copyid: copyId,
+      status: copyStatus,
+      reject_reason: reason,
+      eval_id: userId,
+      bag_id: bagId,
+      del: 1, // Mark as deleted (1)
+    });
+
+    // Return success response
+    return res.status(201).json({
+      success: true,
+      message: "Copy rejected successfully",
+      data: response,
+    });
+  } catch (error) {
+    console.error("Error rejecting copy:", error.message);
+    res.status(500).json({
+      error: "Failed to reject copy",
+      details: error.message,
+    });
+  }
+});
+
+//* API to get rejected copies
+app.get("/api/copy/rejected", authenticateToken, async (req, res) => {
+
+  try {
+    const rejectedCopies = await CopyEval.findAll({
+      where: { del: 1 }, // Filter for deleted records
+      attributes: ["copyid", "reject_reason", "eval_id", "bag_id"],
+      raw: true,
+    });
+
+    if (!rejectedCopies || rejectedCopies.length === 0) {
+      return res.status(404).json({ message: "No rejected copies found" });
+    }
+
+    res.status(200).json(rejectedCopies);
+  } catch (error) {
+    console.error("Error fetching rejected copies:", error.message);
+    res.status(500).json({ error: "Failed to fetch rejected copies" });
+  }
+});
+
+//* API to unreject a copy
+app.post("/api/copy/unreject", adminProtected, async (req, res) => {
+  const { copyId } = req.body;
+
+  console.log("Received request to unreject copy:", req.body);
+
+  // Validate required fields
+  if (!copyId) {
+    return res.status(400).json({ error: "Copy ID is required" });
+  }
+
+  try {
+    // Find the rejected record for the given Copy ID
+    const existingRecord = await CopyEval.findOne({
+      where: { copyid: copyId, del: 1 }, // Filter for deleted records
+    });
+
+    if (!existingRecord) {
+      return res.status(404).json({ error: "No rejected record found" });
+    }
+
+    // Update the record to mark it as not deleted (0)
+    await existingRecord.update({ del: 0 });
+
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: "Copy unrejected successfully",
+    });
+  } catch (error) {
+    console.error("Error unrejecting copy:", error.message);
+    res.status(500).json({ error: "Failed to unreject copy" });
   }
 });
 
