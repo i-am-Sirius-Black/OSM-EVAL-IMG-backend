@@ -2,7 +2,8 @@ import {
     saveEvaluationRecord, 
     getRejectedCopies, 
     rejectCopyRecord, 
-    unrejectCopyRecord 
+    unrejectCopyRecord,
+    getQuestionsService,
   } from '../services/evaluationService.js';
   
   /**
@@ -120,3 +121,50 @@ import {
       });
     }
   }
+
+
+
+
+
+  /**
+ * Get questions by paper ID
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @returns {object} Questions for the specified paper
+ */
+export const getQuestionsByPaperId = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    
+    // Convert paperId to number if it's a string
+    const paperIdNum = parseInt(paperId, 10);
+    
+    if (isNaN(paperIdNum)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Paper ID format'
+      });
+    }
+    
+    const questions = await getQuestionsService(paperIdNum);
+    
+    if (!questions || questions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No questions found for this paper ID'
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: questions
+    });
+  } catch (error) {
+    console.error('Controller error:', error);
+    
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Failed to fetch questions'
+    });
+  }
+};

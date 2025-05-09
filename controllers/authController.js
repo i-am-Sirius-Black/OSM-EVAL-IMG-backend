@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from '../config/config.js';
-import {loginService, registerService} from '../services/authService.js';
+import {changePasswordService, loginService, registerService} from '../services/authService.js';
 import jwt from "jsonwebtoken";
 
 export const checkAuth = (req, res) => {
@@ -98,3 +98,27 @@ export const register = async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+
+export const changePassword = async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const userId = req.user.uid; // Assuming you have the user ID from the token
+  console.log("Password change request for user:", userId, "oldPassword:", oldPassword, "newPassword:", newPassword);
+  
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: "Old password or new password missing" });
+  }
+
+  try {
+    // Call the change password service
+    await changePasswordService(userId, oldPassword, newPassword);
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Error changing password:", error.message);
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}

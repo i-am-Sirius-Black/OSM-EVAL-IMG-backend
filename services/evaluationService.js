@@ -1,4 +1,4 @@
-import { CopyEval } from '../models/index.js';
+import { CopyEval, Questions } from '../models/index.js';
 
 /**
  * Save an evaluation record
@@ -119,4 +119,47 @@ export const unrejectCopyRecord = async (copyId) => {
   );
 
   return true;
+};
+
+
+/**
+ * Get all questions for a specific paper
+ * @param {number} paperId - The ID of the paper
+ * @returns {Promise<Array>} List of questions for the paper
+ */
+export const getQuestionsService = async (paperId) => {
+  // Validate required field
+  if (!paperId) {
+    const error = new Error("Paper ID is required");
+    error.status = 400;
+    throw error;
+  }
+
+  try {
+    // Fetch questions for the specified paper ID
+    const questions = await Questions.findAll({
+      where: { PaperID: paperId },
+      attributes: [
+        'Sno',
+        'PaperID',
+        'QNo',
+        'MaxMark'
+      ],
+      order: [['QNo', 'ASC']], // Order by question number
+      raw: true
+    });
+
+    // Transform data to match frontend expectations if needed
+    const formattedQuestions = questions.map(q => ({
+      sno: q.Sno,
+      paperId: q.PaperID,
+      qNo: q.QNo,
+      maxMark: parseFloat(q.MaxMark) // Convert to number from decimal
+    }));
+
+    return formattedQuestions;
+  } catch (error) {
+    console.error('Error fetching questions:', error);
+    throw error;
+  }
 };

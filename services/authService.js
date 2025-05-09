@@ -4,7 +4,7 @@ import { UserLogin } from "../models/index.js";
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
 
 export const loginService = async (uid, pass) => {
-  const record = await UserLogin.findOne({ where: { Uid: uid } });
+  const record = await UserLogin.findOne({ where: { Uid: uid, Role: "evaluator" } });
 
   if (!record) {
     const error = new Error("Invalid credentials");
@@ -128,4 +128,68 @@ export const generateNewUID = async () => {
     console.error("Error generating new UID:", error.message);
     throw error; // Rethrow the error to be handled by the controller
   }
+};
+
+
+/**
+ * Change user password
+ * @param {string} uid - User ID
+ * @param {string} oldPassword - Current password
+ * @param {string} newPassword - New password to set
+ * @returns {Promise<void>}
+ * @throws {Error} If validation fails or database error occurs
+ */
+export const changePasswordService = async (uid, oldPassword, newPassword) => {
+  // Input validation
+  if (!uid || !oldPassword || !newPassword) {
+    const error = new Error('Missing required parameters');
+    error.status = 400;
+    throw error;
+  }
+
+  // Password strength validation
+  if (newPassword.length < 6) {
+    const error = new Error('New password must be at least 6 characters long');
+    error.status = 400;
+    throw error;
+  }
+  
+  // Find the user
+  const user = await UserLogin.findOne({ where: { Uid: uid } });
+  if (!user) {
+    const error = new Error('User not found');
+    error.status = 404;
+    throw error;
+  }
+
+  // Verify old password
+  const isPasswordValid = await bcrypt.compare(oldPassword, user.Pass);
+  if (!isPasswordValid) {
+    const error = new Error('Current password is incorrect');
+    error.status = 401;
+    throw error;
+  }
+
+  // Check if new password is different from old password
+  if (oldPassword === newPassword) {
+    const error = new Error('New password must be different from current password');
+    error.status = 400;
+    throw error;
+  }
+
+  // Hash the new password
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+// Update the password in the database
+  try {
+    await user.update({ Pass: hashedPassword }); 
+  } catch (error) {
+    console.error('Database error during password update:', error);
+    const serviceError = new Error('Failed to update password');
+    serviceError.status = 500;
+    throw serviceError;
+  }
+
+  // Success - no need to return anything
 };
