@@ -245,36 +245,6 @@ export const generatePdfWithAnnotations = async (doc, copyId, tempDir, dirName) 
   }
 };
 
-/**
- * Get copies by packing ID
- */
-export const getCopiesByPackingId = async (packingId) => {
-  // Step 1: Find all BagIDs for the PackingID
-  const baggingRecords = await Bagging.findAll({
-    where: { PackingID: packingId },
-    attributes: ["BagID"],
-    raw: true,
-  });
-
-  if (!baggingRecords || baggingRecords.length === 0) {
-    throw new Error("No BagIDs found for the given PackingID");
-  }
-
-  const bagIds = baggingRecords.map((record) => record.BagID);
-
-  // Step 2: Find all CopyBarcodes for the BagIDs
-  const gunningRecords = await CopyGunning.findAll({
-    where: { BagID: bagIds, IsScanned: 1 },
-    attributes: ["CopyBarcode"],
-    raw: true,
-  });
-
-  if (!gunningRecords || gunningRecords.length === 0) {
-    throw new Error("No copies found for the given BagIDs");
-  }
-
-  return gunningRecords.map((record) => record.CopyBarcode);
-};
 
 /**
  * Search copies by bag ID
@@ -362,3 +332,6 @@ export const getAllCopiesByPackingId = async (packingId) => {
   // Return the list of copy barcodes
   return gunningRecords.map((record) => record.CopyBarcode);
 };
+
+
+

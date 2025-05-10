@@ -3,37 +3,38 @@ import { sequelize } from '../config/db.js';
 
 /**
  * Get all distinct exams
- * @returns {Array} List of exam objects with name and ID
+ * @returns {Array} List of course objects with name and ID
+ * @returns {Promise<Array>} List of course objects with name and ID
  */
-export const getExams = async () => {
-  const exams = await CenterPackingSlip.findAll({
+export const getCourses = async () => {
+  const courses = await CenterPackingSlip.findAll({
     attributes: [
-      [sequelize.fn("DISTINCT", sequelize.col("Course")), "examName"],
-      [sequelize.col("Course"), "examId"],
+      [sequelize.fn("DISTINCT", sequelize.col("Course")), "courseName"],
+      [sequelize.col("Course"), "courseId"],
     ],
     raw: true,
   });
 
-  return exams.map((exam) => ({
-    examName: exam.examName,
-    examId: exam.examId,
+  return courses.map((course) => ({
+    courseName: course.courseName,
+    courseId: course.courseId,
   }));
 };
 
 /**
- * Get all subjects for a specific exam
- * @param {string} examId - The ID of the exam
- * @returns {Array} List of subject objects with name, ID, and packing ID
+ * Get all subjects for a specific course
+ * @param {string} courseId - The ID of the course
+ * @returns {Promise<Array>} List of subject objects with name, ID, and packing ID
  */
-export const getSubjectsForExam = async (examId) => {
-  if (!examId) {
-    const error = new Error("Exam ID is required");
+export const getSubjectsForCourse = async (courseId) => {
+  if (!courseId) {
+    const error = new Error("Course ID is required");
     error.status = 400;
     throw error;
   }
 
   const subjects = await CenterPackingSlip.findAll({
-    where: { Course: examId },
+    where: { Course: courseId },
     attributes: [
       [sequelize.fn("DISTINCT", sequelize.col("Subject")), "subject"],
       [sequelize.col("SubjectID"), "subjectId"],

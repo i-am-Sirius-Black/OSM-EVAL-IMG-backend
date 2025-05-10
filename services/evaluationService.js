@@ -1,4 +1,4 @@
-import { CopyEval, Questions } from '../models/index.js';
+import { CopyAssignments, CopyEval, Questions } from '../models/index.js';
 
 /**
  * Save an evaluation record
@@ -163,3 +163,92 @@ export const getQuestionsService = async (paperId) => {
     throw error;
   }
 };
+
+
+/**
+ * Get copies assigned to an evaluator
+ * @param {string} evaluatorId - The evaluator's ID
+ * @returns {Promise<Array>} - Array of copy objects with copyId and assignedAt date
+ */
+export const getCopiesToEvaluateService = async (evaluatorId) => {
+  try {
+    // Query copy assignments table to get copies assigned to this evaluator
+    const assignments = await CopyAssignments.findAll({
+      where: {
+        EvaluatorID: evaluatorId,
+        // Only return copies that haven't been fully evaluated yet
+        IsChecked: false
+      },
+      attributes: ['CopyBarcode', 'AssignedAt'],
+      raw: true
+    });
+
+    // Format the response to include both copyId and assignedAt
+    const copies = assignments.map(assignment => ({
+      copyId: assignment.CopyBarcode,
+      assignedAt: assignment.AssignedAt
+    }));
+    
+    // Log results for debugging
+    console.log(`Found ${copies.length} copies assigned to evaluator ${evaluatorId}`);
+    console.log("Assignment data:", { evaluatorId });
+    return copies;
+  } catch (error) {
+    console.error(`Error in getCopiesToEvaluateService: ${error.message}`);
+    throw new Error(`Failed to retrieve copies for evaluator: ${error.message}`);
+  }
+}
+
+
+
+
+
+
+/**
+ * Get evaluation statistics for an evaluator
+ * @param {string} evaluatorId - The evaluator's ID
+ * @returns {Promise<Object>} - Object containing evaluation statistics
+ */
+export const getEvaluationStatsService = async (evaluatorId) => {
+  try {
+    // Get evaluated count
+    const evaluatedCount = await CopyAssignments.count({
+      where: {
+        EvaluatorID: evaluatorId,
+       IsChecked: true // Only count copies that have been evaluated
+      }
+    });
+    
+    // Get pending count
+    const pendingCount = await CopyAssignments.count({
+      where: {
+        EvaluatorID: evaluatorId,
+        IsChecked: false
+      }
+    });
+    
+    // Get total assigned count
+    const totalAssigned = await CopyAssignments.count({
+      where: {
+        EvaluatorID: evaluatorId
+      }
+    });
+    
+    console.log(`Evaluation stats for evaluator ${evaluatorId}:`, {
+      evaluated: evaluatedCount,
+      pending: pendingCount,
+      total: totalAssigned,
+      // partiallyEvaluated: partiallyEvaluatedCount //todo:for future use
+    });
+    
+    return {
+      evaluated: evaluatedCount,
+      pending: pendingCount,
+      total: totalAssigned,
+      // partiallyEvaluated: partiallyEvaluatedCount //todo:for future use
+    };
+  } catch (error) {
+    console.error(`Error in getEvaluationStatsService: ${error.message}`);
+    throw new Error(`Failed to retrieve evaluation stats for evaluator: ${error.message}`);
+  }
+}

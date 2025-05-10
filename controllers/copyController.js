@@ -6,7 +6,6 @@ import fs from 'fs-extra';
 import { 
   getCopyPageImage, 
   generatePdfWithAnnotations,
-  getCopiesByPackingId,
   searchCopiesByBagId,
   getAnnotatedCopies,
   getAllCopiesByPackingId
@@ -106,30 +105,6 @@ export const copyPdfDownload = async (req, res) => {
   }
 }
 
-/**
- * Fetch copies by packing ID
- */
-export const fetchCopy = async (req, res) => {
-  try {
-    const { packingId } = req.query;
-
-    if (!packingId) {
-      return res.status(400).json({ error: "Packing ID is required" });
-    }
-
-    const copyList = await getCopiesByPackingId(packingId);
-
-    if (!copyList || copyList.length === 0) {
-      return res.status(404).json({ error: "No copies found for the given packing ID" });
-    }
-
-    // Return the list of copies
-    res.status(200).json(copyList);
-  } catch (error) {
-    console.error("Error fetching copies by subject:", error.message);
-    res.status(500).json({ error: "Failed to fetch copies by subject" });
-  }
-}
 
 /**
  * Search and filter copies
@@ -185,8 +160,7 @@ export const getAllCopiesByPacking = async (req, res) => {
   try {
     const { packingId } = req.query;
     console.log("Received request for /api/copies/by-packing/:id with packingId:", packingId);
-    
-
+  
     const copyList = await getAllCopiesByPackingId(packingId);
 
     // Return the list of copies
@@ -201,6 +175,7 @@ export const getAllCopiesByPacking = async (req, res) => {
     });
   }
 }
+
 
 
 

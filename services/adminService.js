@@ -1,7 +1,8 @@
-import { UserLogin } from "../models/index.js";
+import { CopyAssignments, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
+import { sequelize } from "../config/db.js";
 
 
 
@@ -95,5 +96,189 @@ export const getEvaluatorsService = async () => {
     serviceError.status = 500;
     serviceError.original = error;
     throw serviceError;
+  }
+};
+
+/**
+ * Assign copies to an evaluator
+ *
+ * @param {string} evaluatorId - The ID of the evaluator
+ * @param {Array<string>} copyIds - Array of copy barcodes to assign
+ * @param {string} assignedBy - The ID of the admin making the assignment
+ * @returns {Promise<Array>} - The created assignment records
+ */
+export const assignCopiesToEvaluator = async (evaluatorId, copyIds, assignedBy) => {
+  // Validate evaluator exists and is active
+  const evaluator = await UserLogin.findOne({ 
+    where: { 
+      Uid: evaluatorId, 
+      Role: 'evaluator', 
+      Active: true 
+    } 
+  });
+  
+  if (!evaluator) {
+    const error = new Error(`Evaluator with ID ${evaluatorId} not found or not active`);
+    error.status = 404;
+    throw error;
+  }
+
+  // Check if any copies are already assigned - do this outside the transaction
+  const existingAssignments = await CopyAssignments.findAll({
+    where: {
+      CopyBarcode: copyIds
+    }
+  });
+
+  console.log(`Found ${existingAssignments.length} existing assignments for the provided copy barcodes`);
+  
+  
+  // Handle already assigned copies
+  let unassignedCopyIds = copyIds;
+  if (existingAssignments.length > 0) {
+    // Get the list of already assigned barcodes
+    const alreadyAssigned = existingAssignments.map(assignment => assignment.CopyBarcode);
+    
+    // Filter out already assigned copies
+    unassignedCopyIds = copyIds.filter(copyId => !alreadyAssigned.includes(copyId));
+    
+    if (unassignedCopyIds.length === 0) {
+      // All copies are already assigned
+      const error = new Error("All selected copies are already assigned to evaluators");
+      error.status = 400;
+      throw error;
+    }
+    
+    // Continue with unassigned copies only
+    console.log(`${alreadyAssigned.length} copies already assigned, proceeding with ${unassignedCopyIds.length} unassigned copies`);
+  }
+  
+  // Only start transaction if we have copies to assign
+  if (unassignedCopyIds.length === 0) {
+    return [];
+  }
+  
+  // Format date properly for SQL Server
+  const currentDate = new Date();
+  // Format as ISO string without milliseconds and Z to match SQL Server expected format
+ 
+ 
+  //  Pass native Date object
+const assignedAtDate = new Date();
+
+  // Prepare assignment records with properly formatted date
+  const assignments = unassignedCopyIds.map(copyId => ({
+    CopyBarcode: copyId,
+    EvaluatorID: evaluatorId,
+    AssignedBy: assignedBy,
+    AssignedAt: assignedAtDate,
+    IsChecked: false
+  }));  
+  // Use a new transaction for just the bulk insert
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Bulk create assignment records
+    const result = await CopyAssignments.bulkCreate(assignments, { 
+      transaction,
+      // Explicitly specify fields to ensure control over what is sent to DB
+      fields: ['CopyBarcode', 'EvaluatorID', 'AssignedBy', 'AssignedAt', 'IsChecked']
+    });
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    return result;
+  } catch (error) {
+    // Handle rollback
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error('Error during transaction rollback:', rollbackError);
+      // Just log rollback errors, don't throw them
+    }
+    
+    // Enhanced error logging
+    console.error('SQL Error in assignCopiesToEvaluator:', {
+      message: error.message,
+      sql: error.sql,
+      code: error.parent?.code,
+      originalError: error.original?.message
+    });
+    
+    // Rethrow with better context
+    const enhancedError = new Error(`Database error while assigning copies: ${error.message}`);
+    enhancedError.status = 500;
+    enhancedError.originalError = error;
+    throw enhancedError;
+  }
+};
+
+
+
+
+
+/**
+ * Get status details for all evaluators
+ * @returns {Promise<Array>} - Array of evaluator statistics objects
+ */
+export const getEvaluatorsStatusService = async () => {
+  try {
+    // Step 1: Get all distinct evaluator IDs
+    const evaluators = await CopyAssignments.findAll({
+      attributes: [
+        'EvaluatorID',
+        [sequelize.fn('COUNT', sequelize.col('AssignmentID')), 'totalAssigned'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN IsChecked = 1 THEN 1 ELSE 0 END')), 'checked'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN IsChecked = 0 THEN 1 ELSE 0 END')), 'pending']
+      ],
+      group: ['EvaluatorID'],
+      raw: true
+    });
+
+    // Map the results to the desired format
+    const evaluatorStats = evaluators.map(evaluator => ({
+      evaluatorId: evaluator.EvaluatorID,
+      totalAssigned: parseInt(evaluator.totalAssigned) || 0,
+      checked: parseInt(evaluator.checked) || 0, 
+      pending: parseInt(evaluator.pending) || 0
+    }));
+
+    // Step 2: (Optional) Enhance with evaluator names if needed
+    const evaluatorIds = evaluatorStats.map(stat => stat.evaluatorId);
+    
+    if (evaluatorIds.length > 0) {
+      const evaluatorDetails = await UserLogin.findAll({
+        where: {
+          Uid: evaluatorIds,
+          Role: 'evaluator'
+        },
+        attributes: ['Uid', 'Name', 'Email'],
+        raw: true
+      });
+
+      // Create a lookup map for quick access
+      const evaluatorMap = {};
+      evaluatorDetails.forEach(detail => {
+        evaluatorMap[detail.Uid] = {
+          name: detail.Name,
+          email: detail.Email
+        };
+      });
+
+      // Add evaluator details to the stats
+      evaluatorStats.forEach(stat => {
+        if (evaluatorMap[stat.evaluatorId]) {
+          stat.name = evaluatorMap[stat.evaluatorId].name;
+          stat.email = evaluatorMap[stat.evaluatorId].email;
+        }
+      });
+    }
+
+    console.log(`Retrieved statistics for ${evaluatorStats.length} evaluators`);
+    return evaluatorStats;
+  } catch (error) {
+    console.error(`Error in getEvaluatorsStatusService: ${error.message}`);
+    throw new Error(`Failed to retrieve evaluator statistics: ${error.message}`);
   }
 };

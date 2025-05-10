@@ -4,6 +4,8 @@ import {
     rejectCopyRecord, 
     unrejectCopyRecord,
     getQuestionsService,
+    getCopiesToEvaluateService,
+    getEvaluationStatsService,
   } from '../services/evaluationService.js';
   
   /**
@@ -168,3 +170,67 @@ export const getQuestionsByPaperId = async (req, res) => {
     });
   }
 };
+
+
+
+
+/**
+ * Get copies to evaluate
+ */
+export const getCopiesToEvaluate = async (req, res) => {
+  try {
+    const { evaluatorId } = req.query;
+
+    if (!evaluatorId) {
+      return res.status(400).json({ error: "Evaluator ID is required" });
+    }
+
+    const copiesToEvaluate = await getCopiesToEvaluateService(evaluatorId);
+
+    // Return empty array with 200 status if no copies found (better for client handling)
+    if (!copiesToEvaluate || copiesToEvaluate.length === 0) {
+      return res.status(200).json({ 
+        message: "No copies found for evaluation",
+        count: 0,
+        copies: [] 
+      });
+    }
+
+    res.status(200).json({
+      message: "Successfully retrieved copies for evaluation",
+      count: copiesToEvaluate.length,
+      copies: copiesToEvaluate
+    });
+  } catch (error) {
+    console.error("Error fetching copies to evaluate:", error.message);
+    res.status(500).json({ error: "Failed to fetch copies for evaluation" });
+  }
+}
+
+
+
+
+
+
+/**
+ * Get evaluation statistics for an evaluator
+ */
+export const getEvaluationStats = async (req, res) => {
+  try {
+    const { evaluatorId } = req.query;
+
+    if (!evaluatorId) {
+      return res.status(400).json({ error: "Evaluator ID is required" });
+    }
+
+    const stats = await getEvaluationStatsService(evaluatorId);
+
+    res.status(200).json({
+      message: "Successfully retrieved evaluation statistics",
+      stats
+    });
+  } catch (error) {
+    console.error("Error fetching evaluation statistics:", error.message);
+    res.status(500).json({ error: "Failed to fetch evaluation statistics" });
+  }
+}
