@@ -5,7 +5,9 @@ import documentRoutes from './documentRoutes.js';
 import examRoutes from './examRoutes.js';
 import evaluationRoutes from './evaluationRoutes.js';
 import adminRoutes from './adminRoutes.js';
+import evalAutosaveRoutes from './evalAutosaveRoutes.js';
+
 // Import routes
 
 // Export routes
-export { authRoutes, copyRoutes, annotationRoutes, documentRoutes, examRoutes, evaluationRoutes, adminRoutes };
+export { authRoutes, copyRoutes, annotationRoutes, documentRoutes, examRoutes, evalAutosaveRoutes, evaluationRoutes, adminRoutes };

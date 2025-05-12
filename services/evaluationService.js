@@ -1,4 +1,4 @@
-import { CopyAssignments, CopyEval, Questions } from '../models/index.js';
+import { CopyAssignments, CopyEval, EvaluationAutosave, Questions } from '../models/index.js';
 
 /**
  * Save an evaluation record
@@ -183,10 +183,31 @@ export const getCopiesToEvaluateService = async (evaluatorId) => {
       raw: true
     });
 
-    // Format the response to include both copyId and assignedAt
+
+    // // Format the response to include both copyId and assignedAt
+    // const copies = assignments.map(assignment => ({
+    //   copyId: assignment.CopyBarcode,
+    //   assignedAt: assignment.AssignedAt
+    // }));
+
+
+        // Check for any partial copies in EvaluationAutosave table
+    const partialCopies = await EvaluationAutosave.findAll({
+      where: {
+        EvaluatorID: evaluatorId
+      },
+      attributes: ['CopyID'], // Make sure this matches your actual column name
+      raw: true
+    });
+
+    // Create a Set of partial copy IDs for faster lookup
+    const partialCopyIdsSet = new Set(partialCopies.map(copy => copy.CopyID));
+
+    // Format the response to include copyId, assignedAt, and partial flag
     const copies = assignments.map(assignment => ({
       copyId: assignment.CopyBarcode,
-      assignedAt: assignment.AssignedAt
+      assignedAt: assignment.AssignedAt,
+      partial: partialCopyIdsSet.has(assignment.CopyBarcode) // true if copy exists in autosave, false otherwise
     }));
     
     // Log results for debugging
@@ -226,6 +247,13 @@ export const getEvaluationStatsService = async (evaluatorId) => {
         IsChecked: false
       }
     });
+
+    //Get partially evaluated count
+    const partialCount = await EvaluationAutosave.count({
+      where: {
+        EvaluatorID: evaluatorId
+      }
+    });
     
     // Get total assigned count
     const totalAssigned = await CopyAssignments.count({
@@ -238,14 +266,14 @@ export const getEvaluationStatsService = async (evaluatorId) => {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      // partiallyEvaluated: partiallyEvaluatedCount //todo:for future use
+      partial: partialCount 
     });
     
     return {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      // partiallyEvaluated: partiallyEvaluatedCount //todo:for future use
+      partial: partialCount
     };
   } catch (error) {
     console.error(`Error in getEvaluationStatsService: ${error.message}`);

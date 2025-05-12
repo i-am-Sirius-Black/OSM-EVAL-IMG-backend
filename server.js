@@ -10,7 +10,7 @@ import { initializeDatabases } from './config/db.js';
 
 // Import routes
 import { setupAssociations } from './models/index.js';
-import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evaluationRoutes, examRoutes,  } from './routes/index.js';
+import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evalAutosaveRoutes, evaluationRoutes, examRoutes,  } from './routes/index.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -41,6 +41,7 @@ app.use('/api/evaluations', evaluationRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/autosave', evalAutosaveRoutes);
 
 
 // Initialize databases and start server
