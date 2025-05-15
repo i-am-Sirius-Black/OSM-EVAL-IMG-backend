@@ -9,7 +9,7 @@ import { EvaluationAutosave } from "../models/index.js";
  * @param {object} marks - Marking data (will be stored as JSON)
  * @returns {Promise<object>} - The saved autosave record
  */
-export const saveEvaluationProgress = async (evaluatorId, copyId, annotations, marks) => {
+export const saveEvaluationProgress = async (evaluatorId, copyId, annotations, marks, seconds) => {
   try {
     // Check if an autosave record already exists for this evaluator and copy
     const existingRecord = await EvaluationAutosave.findOne({
@@ -24,6 +24,7 @@ export const saveEvaluationProgress = async (evaluatorId, copyId, annotations, m
       await existingRecord.update({
         Annotations: JSON.stringify(annotations),
         Marks: JSON.stringify(marks),
+        Seconds: seconds,
         LastUpdatedAt: new Date()
       });
 
@@ -35,7 +36,9 @@ export const saveEvaluationProgress = async (evaluatorId, copyId, annotations, m
         EvaluatorID: evaluatorId,
         CopyID: copyId,
         Annotations: JSON.stringify(annotations),
-        Marks: JSON.stringify(marks)
+        Marks: JSON.stringify(marks),
+        Seconds: seconds,
+        LastUpdatedAt: new Date(),
       });
 
       console.log(`Created new autosave record for evaluator ${evaluatorId} and copy ${copyId}`);
@@ -74,6 +77,7 @@ export const getEvaluationProgress = async (evaluatorId, copyId) => {
       copyId: record.CopyID,
       annotations: JSON.parse(record.Annotations),
       marks: JSON.parse(record.Marks),
+      seconds: record.Seconds,
       lastUpdatedAt: record.LastUpdatedAt
     };
 

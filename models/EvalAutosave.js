@@ -17,11 +17,15 @@ const defineEvaluationAutosave = (sequelize) => {
     },
     Annotations: { 
       type: DataTypes.TEXT,  // Store as JSON string, TEXT is a good choice for large JSON
-      allowNull: false 
+      allowNull: true 
     },
     Marks: { 
       type: DataTypes.TEXT,  // Store as JSON string
-      allowNull: false 
+      allowNull: true
+    },
+    Seconds:{
+      type: DataTypes.INTEGER, 
+      allowNull: true 
     },
     LastUpdatedAt: { 
       type: DataTypes.DATE, 

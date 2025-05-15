@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from '../config/config.js';
-import {changePasswordService, loginService, registerService} from '../services/authService.js';
+import {changePasswordService, generateNewUID, loginService, registerService} from '../services/authService.js';
 import jwt from "jsonwebtoken";
 
 export const checkAuth = (req, res) => {

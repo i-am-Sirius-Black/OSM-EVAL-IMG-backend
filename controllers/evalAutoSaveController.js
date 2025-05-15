@@ -11,7 +11,7 @@ import {
  */
 export const saveProgress = async (req, res) => {
   try {
-    const { evaluatorId, copyId, annotations, marks } = req.body;
+    const { evaluatorId, copyId, annotations, marks, seconds } = req.body;
 
     // Validate required fields
     if (!evaluatorId || !copyId) {
@@ -30,7 +30,7 @@ export const saveProgress = async (req, res) => {
     }
 
     // Save the evaluation progress
-    await saveEvaluationProgress(evaluatorId, copyId, annotations, marks);
+    await saveEvaluationProgress(evaluatorId, copyId, annotations, marks, seconds);
 
     res.status(200).json({
       success: true,

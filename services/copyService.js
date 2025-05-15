@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { CopyPage, CopyAnnotation, Bagging, CopyGunning } from '../models/index.js';
+import { CopyPage, CopyAnnotation, Bagging, CopyGunning, CopyAssignments } from '../models/index.js';
 
 /**
  * Get image data for a copy page
@@ -275,6 +275,8 @@ export const searchCopiesByBagId = async (bagId, searchTerm, sortOrder) => {
   return copyList;
 };
 
+
+
 /**
  * Get all annotated copies
  */
@@ -329,8 +331,30 @@ export const getAllCopiesByPackingId = async (packingId) => {
     throw error;
   }
 
+  // Get all copy barcodes
+  const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
+  
+  // Find all assigned copies
+  const assignedCopies = await CopyAssignments.findAll({
+    where: {
+      CopyBarcode: allCopyBarcodes
+    },
+    attributes: ['CopyBarcode'],
+    raw: true
+  });
+  
+  // Create a set of assigned copy barcodes for faster lookup
+  const assignedCopySet = new Set(assignedCopies.map(copy => copy.CopyBarcode));
+  
+  // Filter out the assigned copies, keeping only unassigned ones
+  const unassignedCopies = allCopyBarcodes.filter(barcode => !assignedCopySet.has(barcode));
+  
+  // Return the list of unassigned copy barcodes
+  return unassignedCopies;
+
+
   // Return the list of copy barcodes
-  return gunningRecords.map((record) => record.CopyBarcode);
+  // return gunningRecords.map((record) => record.CopyBarcode);
 };
 
 

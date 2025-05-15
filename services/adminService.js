@@ -1,4 +1,4 @@
-import { CopyAssignments, UserLogin } from "../models/index.js";
+import { CopyAssignments, CopyEval, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -280,5 +280,36 @@ export const getEvaluatorsStatusService = async () => {
   } catch (error) {
     console.error(`Error in getEvaluatorsStatusService: ${error.message}`);
     throw new Error(`Failed to retrieve evaluator statistics: ${error.message}`);
+  }
+};
+
+
+
+/**
+ * Get all Evaluated/checked copies
+ */
+export const EvaluatedCopiesService = async () => {
+  try {
+    const evaluatedCopies = await CopyEval.findAll({
+      where: { 
+        del: false,
+        status: 'Evaluated' // Ensure we only get evaluated copies
+      },
+      attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time', 'createdat', 'updatedat'],
+    });
+
+    // Return proper data structure with all relevant fields
+    return evaluatedCopies.map(record => ({
+      copyId: record.copyid,
+      evaluatorId: record.eval_id,
+      obtainedMarks: record.obt_mark,
+      maxMarks: record.max_mark,
+      evaluationTime: record.eval_time,
+      createdAt: record.createdat,
+      updatedAt: record.updatedat
+    }));
+  } catch (error) {
+    console.error("Error in EvaluatedCopiesService:", error);
+    throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
   }
 };

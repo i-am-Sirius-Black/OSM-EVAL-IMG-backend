@@ -1,5 +1,24 @@
-import { COOKIE_MAX_AGE } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, getEvaluatorsService, getEvaluatorsStatusService } from "../services/adminService.js";
+import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
+import { adminLoginService, assignCopiesToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService } from "../services/adminService.js";
+import jwt from "jsonwebtoken";
+
+
+export const checkAdminAuth = (req, res) => {
+  const token = req.cookies.adminAuthToken;
+  console.log("Checking admin auth, token exists:", !!token);
+  
+  if (!token) {
+    return res.status(401).json({ error: "Not authenticated admin" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    res.status(200).json({ user: decoded });
+  } catch (err) {
+    console.error("Token verification failed:", err.message);
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
 
 
 
@@ -24,7 +43,7 @@ export const adminLogin = async (req, res) => {
       const { token, userData } = await adminLoginService(uid, pass);
   
       // Set the token as an HTTP-only cookie
-      res.cookie("authToken", token, {
+      res.cookie("adminAuthToken", token, {
         httpOnly: true, // Prevent access via JavaScript
         secure: process.env.NODE_ENV === "production", // Use HTTPS in production
         sameSite: "strict", // Prevent CSRF
@@ -53,7 +72,7 @@ export const adminLogin = async (req, res) => {
 
 
   export const adminLogout = async (req, res) => {
-    res.clearCookie("authToken", {
+    res.clearCookie("adminAuthToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
@@ -165,3 +184,35 @@ export const getEvaluatorsStatus = async (req, res) => {
     });
   }
 };
+
+
+
+
+/**
+ * Get evaluated copies
+ */
+export const getEvaluatedCopies = async (req, res) => {
+  try {
+    const evaluatedCopies = await EvaluatedCopiesService();
+
+    if (!evaluatedCopies || evaluatedCopies.length === 0) {
+      return res.status(200).json({
+        message: "No evaluated copies found",
+        count: 0,
+        copies: []
+      });
+    }
+
+    res.status(200).json({
+      message: "Successfully retrieved evaluated copies",
+      count: evaluatedCopies.length,
+      copies: evaluatedCopies
+    });
+  } catch (error) {
+    console.error("Error fetching evaluated copies:", error.message);
+    res.status(500).json({ 
+      error: "Failed to fetch evaluated copies",
+      message: error.message
+    });
+  }
+}
