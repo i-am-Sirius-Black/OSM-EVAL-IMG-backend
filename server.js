@@ -10,7 +10,8 @@ import { initializeDatabases } from './config/db.js';
 
 // Import routes
 import { setupAssociations } from './models/index.js';
-import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evalAutosaveRoutes, evaluationRoutes, examRoutes,  } from './routes/index.js';
+import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evalAutosaveRoutes, evaluationRoutes, evaluatorRoutes, examRoutes,  } from './routes/index.js';
+import scheduleResetExpiredBatches from './utils/sheduleResetExpiredBatches.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -42,6 +43,11 @@ app.use('/api/exams', examRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/autosave', evalAutosaveRoutes);
+app.use('/api/evaluator', evaluatorRoutes);
+
+
+
+
 
 
 // Initialize databases and start server
@@ -50,6 +56,10 @@ const startServer = async () => {
     const dbInitialized = await initializeDatabases();
     
     if (dbInitialized) {
+
+      // Setup batch expiry task
+      scheduleResetExpiredBatches();
+
       const PORT = process.env.PORT || 3000;
       app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);

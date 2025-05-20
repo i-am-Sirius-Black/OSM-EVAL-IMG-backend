@@ -1,24 +1,23 @@
 import { DataTypes, Sequelize } from 'sequelize';
 
-const defineCopyAssignment = (sequelize) => {
-
-const CopyAssignment = sequelize.define("tbl_copy_assignments", {
+const defineSubjectAssignment = (sequelize) => {
+  const SubjectAssignment = sequelize.define("tbl_subject_assignments", {
     AssignmentID: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    CopyBarcode: {
+    SubjectCode: {
       type: DataTypes.STRING(50),
+      allowNull: false,
+    },
+    ExamName: {
+      type: DataTypes.STRING(100),
       allowNull: false,
     },
     EvaluatorID: {
       type: DataTypes.STRING(50),
       allowNull: false,
-    },
-    BatchID: {                   // Add this field
-      type: DataTypes.INTEGER,
-      allowNull: true,           // Allow null initially for backward compatibility
     },
     AssignedBy: {
       type: DataTypes.STRING(50),
@@ -28,21 +27,16 @@ const CopyAssignment = sequelize.define("tbl_copy_assignments", {
       type: DataTypes.DATE,
       defaultValue: Sequelize.NOW,
     },
-    IsChecked: {
+    Active: {
       type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    },
-    CheckedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
+      defaultValue: true,
     },
   }, {
-    tableName: "tbl_copy_assignments",
+    tableName: "tbl_subject_assignments",
     timestamps: false,
   });
-
   
-  return CopyAssignment;
+  return SubjectAssignment;
 };
 
-export default defineCopyAssignment;
+export default defineSubjectAssignment;

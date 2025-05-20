@@ -10,6 +10,10 @@ import defineUserLogin from './UserLogin.js';
 import defineQuestions from './Questions.js';
 import defineCopyAssignments from './CopyAssignments.js';
 import defineEvaluationAutosave from './EvalAutosave.js';
+import defineCopyBatchAssignment from './CopyBatchAssignment.js';
+import defineSubjectAssignment from './SubjectAssignments.js';
+import defineSubjectData from './SubjectData.js';
+import defineVwSubjectData from './VwSubjectData.js';
 
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
@@ -19,6 +23,10 @@ export const CopyAssignments = defineCopyAssignments(sequelize);
 export const CopyAnnotation = defineCopyAnnotation(sequelize);
 export const Questions = defineQuestions(sequelize);
 export const EvaluationAutosave = defineEvaluationAutosave(sequelize);
+export const CopyBatchAssignment = defineCopyBatchAssignment(sequelize);
+export const SubjectAssignment = defineSubjectAssignment(sequelize);
+export const SubjectData = defineSubjectData(sequelize);
+// export const VwSubjectData = defineVwSubjectData(sequelize);
 
 export const Bagging = defineBagging(evalSequelize);
 export const CopyGunning = defineCopyGunning(evalSequelize);
@@ -32,5 +40,38 @@ export const setupAssociations = () => {
   // Example: Bagging has many CopyGunning records
   Bagging.hasMany(CopyGunning, { foreignKey: "BagID", sourceKey: "BagID" });
   CopyGunning.belongsTo(Bagging, { foreignKey: "BagID", targetKey: "BagID" });
-  
+
+  SubjectAssignment.hasMany(CopyBatchAssignment, {
+  foreignKey: 'SubjectCode',
+  sourceKey: 'SubjectCode',
+  constraints: false
+});
+
+CopyBatchAssignment.belongsTo(SubjectAssignment, {
+  foreignKey: 'SubjectCode',
+  targetKey: 'SubjectCode',
+  constraints: false
+});
+
+// New association: SubjectAssignment belongs to UserLogin
+  SubjectAssignment.belongsTo(UserLogin, {
+    foreignKey: 'EvaluatorID', // The column in tbl_subject_assignments
+    targetKey: 'Uid', // The column in UserLogin
+    constraints: false // Set to true if you have a foreign key constraint in the database
+  });
+
+  // Add association between CopyBatchAssignment and UserLogin
+CopyBatchAssignment.belongsTo(UserLogin, {
+  foreignKey: 'EvaluatorID',
+  targetKey: 'Uid',
+  constraints: false
+});
+
+// Add association between CopyAssignments and UserLogin
+CopyAssignments.belongsTo(UserLogin, {
+  foreignKey: 'EvaluatorID',
+  targetKey: 'Uid',
+  constraints: false
+});
 };
+

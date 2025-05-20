@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService } from "../services/adminService.js";
+import { adminLoginService, assignCopiesToEvaluator, assignSubjectToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -216,3 +216,77 @@ export const getEvaluatedCopies = async (req, res) => {
     });
   }
 }
+
+
+
+
+//?? *********************
+
+// Add these functions to the existing adminController.js file
+
+/**
+ * Assign a subject to an evaluator
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const assignSubject = async (req, res) => {
+  const { evaluatorId, subjectCode, examName } = req.body;
+  
+  // Get admin ID from authenticated user
+  const assignedBy = req.user.uid;
+
+  // Validate request body
+    if (!evaluatorId || !subjectCode ) {
+      return res.status(400).json({ 
+      error: "Invalid request. Please provide evaluatorId, subjectCode, examName" 
+    });
+  }
+
+  try {
+    const result = await assignSubjectToEvaluator(evaluatorId, subjectCode, examName, assignedBy);
+    
+    console.log(`Subject assigned successfully: Evaluator ID: ${evaluatorId}, Subject: ${subjectCode}`);
+    
+    return res.status(200).json({ 
+      message: "Subject assigned successfully", 
+      assignment: result 
+    });
+  } catch (error) {
+    console.error("Error assigning subject:", error.message);
+    
+    if (error.status) {
+      return res.status(error.status).json({ 
+        message: 'Error assigning subject', 
+        error: error.message 
+      });
+    }
+    return res.status(500).json({ 
+      message: 'Error assigning subject', 
+      error: 'Internal server error' 
+    });
+  }
+};
+
+/**
+ * Get all subject assignments
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getSubjectAssignments = async (req, res) => {
+  try {
+    const assignments = await getSubjectAssignmentsService();
+    
+    return res.status(200).json({
+      message: "Successfully retrieved subject assignments",
+      assignments,
+      count: assignments.length
+    });
+  } catch (error) {
+    console.error("Error fetching subject assignments:", error.message);
+    
+    return res.status(500).json({ 
+      error: "Failed to fetch subject assignments",
+      message: error.message 
+    });
+  }
+};

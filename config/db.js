@@ -13,6 +13,9 @@ export const sequelize = new Sequelize("Testing", "ttspl", "admin", {
       trustServerCertificate: true,
     },
   },
+    define: {
+    synOnAssociation: false,
+  },
   pool: {
     max: 10,
     min: 0,

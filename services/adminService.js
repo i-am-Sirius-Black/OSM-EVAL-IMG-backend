@@ -1,4 +1,4 @@
-import { CopyAssignments, CopyEval, UserLogin } from "../models/index.js";
+import { CopyAssignments, CopyEval, SubjectAssignment, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -313,3 +313,109 @@ export const EvaluatedCopiesService = async () => {
     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
   }
 };
+
+
+
+
+
+
+
+
+
+//? *********************************************
+
+// Add these functions to the existing adminService.js file
+
+/**
+ * Assign a subject to an evaluator
+ * @param {string} evaluatorId - ID of the evaluator
+ * @param {string} subjectCode - Subject code to assign
+ * @param {string} examName - Name of the exam
+ * @param {string} slotName - Name of the slot
+ * @param {string} assignedBy - Admin user ID making the assignment
+ * @returns {Promise<Object>} - Created subject assignment record
+ */
+export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examName, assignedBy) => {
+  try {
+    // Validate evaluator exists and is active
+    const evaluator = await UserLogin.findOne({ 
+      where: { 
+        Uid: evaluatorId, 
+        Role: 'evaluator', 
+        Active: true 
+      } 
+    });
+    
+    if (!evaluator) {
+      const error = new Error(`Evaluator with ID ${evaluatorId} not found or not active`);
+      error.status = 404;
+      throw error;
+    }
+
+    // Check if this subject is already assigned to this evaluator
+    const existingAssignment = await SubjectAssignment.findOne({
+      where: {
+        EvaluatorID: evaluatorId,
+        SubjectCode: subjectCode,
+        ExamName: examName,
+        Active: true
+      }
+    });
+
+    if (existingAssignment) {
+      return existingAssignment; // Subject already assigned to this evaluator
+    }
+
+    // Create a new subject assignment
+    const subjectAssignment = await SubjectAssignment.create({
+      SubjectCode: subjectCode,
+      ExamName: examName,
+      EvaluatorID: evaluatorId,
+      AssignedBy: assignedBy,
+      AssignedAt: new Date(),
+      Active: true
+    });
+
+    return subjectAssignment;
+  } catch (error) {
+    console.error('Error in assignSubjectToEvaluator:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all subjects assigned to evaluators
+ * @returns {Promise<Array>} - List of subject assignments with evaluator details
+ */
+export const getSubjectAssignmentsService = async () => {
+  try {
+    const assignments = await SubjectAssignment.findAll({
+      where: { Active: true },
+      include: [
+        {
+          model: UserLogin,
+          attributes: ['Name', 'Email'],
+          required: false
+        }
+      ]
+    });
+
+    return assignments.map(assignment => ({
+      assignmentId: assignment.AssignmentID,
+      subjectCode: assignment.SubjectCode,
+      examName: assignment.ExamName,
+      evaluatorId: assignment.EvaluatorID,
+      evaluatorName: assignment.UserLogin?.Name || 'Unknown',
+      evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
+      assignedBy: assignment.AssignedBy,
+      assignedAt: assignment.AssignedAt,
+      active: assignment.Active
+    }));
+  } catch (error) {
+    console.error('Error in getSubjectAssignmentsService:', error);
+    throw new Error(`Failed to retrieve subject assignments: ${error.message}`);
+  }
+};
+
+
+
