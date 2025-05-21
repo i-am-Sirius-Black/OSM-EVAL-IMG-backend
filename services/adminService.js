@@ -1,4 +1,4 @@
-import { CopyAssignments, CopyEval, SubjectAssignment, UserLogin } from "../models/index.js";
+import { CopyAssignments, CopyBatchAssignment, CopyEval, SubjectAssignment, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -414,6 +414,70 @@ export const getSubjectAssignmentsService = async () => {
   } catch (error) {
     console.error('Error in getSubjectAssignmentsService:', error);
     throw new Error(`Failed to retrieve subject assignments: ${error.message}`);
+  }
+};
+
+
+
+/**
+ * Unassign a subject from an evaluator
+ * @param {string} evaluatorId - ID of the evaluator 
+ * @param {string} subjectCode - Subject code to unassign
+ * @returns {Promise<Object>} - Result of the unassignment operation
+ */
+export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => {
+  try {
+    // Find the assignment to confirm it exists
+    const existingAssignment = await SubjectAssignment.findOne({
+      where: {
+        EvaluatorID: evaluatorId,
+        SubjectCode: subjectCode,
+        Active: true
+      }
+    });
+
+    if (!existingAssignment) {
+      const error = new Error(`No active assignment found for evaluator ${evaluatorId} and subject ${subjectCode}`);
+      error.status = 404;
+      throw error;
+    }
+
+    // Check if evaluator has any active batches for this subject
+    const activeBatch = await CopyBatchAssignment.findOne({
+      where: {
+        EvaluatorID: evaluatorId,
+        SubjectCode: subjectCode,
+        IsActive: true
+      }
+    });
+
+    if (activeBatch) {
+      const error = new Error(`Cannot unassign subject as evaluator has active copies assigned for this subject`);
+      error.status = 400;
+      throw error;
+    }
+
+    // Update the assignment to set Active = false
+    const updatedCount = await SubjectAssignment.update(
+      { Active: false },
+      {
+        where: {
+          EvaluatorID: evaluatorId,
+          SubjectCode: subjectCode,
+          Active: true
+        }
+      }
+    );
+
+    return {
+      success: updatedCount[0] > 0,
+      unassignedCount: updatedCount[0],
+      evaluatorId,
+      subjectCode
+    };
+  } catch (error) {
+    console.error('Error in unassignSubjectFromEvaluator:', error);
+    throw error;
   }
 };
 

@@ -445,6 +445,7 @@ export const completeCopyEvaluationService = async (evaluatorId, copyBarcode) =>
   }
 };
 
+
 /**
  * Reset expired batches and remove assignments
  * Called by a scheduled job
@@ -469,7 +470,7 @@ export const resetExpiredBatchesService = async () => {
       return { message: 'No expired batches found', count: 0 };
     }
 
-    // Get all evaluator IDs with expired batches
+    // Get all batch IDs that have expired
     const expiredBatchIds = expiredBatches.map(batch => batch.BatchID);
 
     // Mark batches as inactive
@@ -481,11 +482,11 @@ export const resetExpiredBatchesService = async () => {
       }
     );
 
-    // Find all copy assignments for these batches that aren't checked
+    // Find all copy assignments FOR THESE SPECIFIC BATCHES that aren't checked
     const expiredAssignments = await CopyAssignments.findAll({
       where: {
-        EvaluatorID: {
-          [Op.in]: expiredBatches.map(batch => batch.EvaluatorID)
+        BatchID: {
+          [Op.in]: expiredBatchIds
         },
         IsChecked: false
       },
@@ -505,10 +506,13 @@ export const resetExpiredBatchesService = async () => {
         }
       );
 
-      // Delete the assignments
+      // Delete the assignments - now using BatchID to only target expired batch assignments
       await CopyAssignments.destroy({
         where: {
-          AssignmentID: expiredAssignments.map(a => a.AssignmentID)
+          BatchID: {
+            [Op.in]: expiredBatchIds
+          },
+          IsChecked: false
         },
         transaction
       });
@@ -527,6 +531,90 @@ export const resetExpiredBatchesService = async () => {
     throw error;
   }
 };
+
+// /**
+//  * Reset expired batches and remove assignments
+//  * Called by a scheduled job
+//  */
+// export const resetExpiredBatchesService = async () => {
+//   const transaction = await sequelize.transaction();
+  
+//   try {
+//     // Find all expired batches
+//     const expiredBatches = await CopyBatchAssignment.findAll({
+//       where: {
+//         IsActive: true,
+//         ExpiresAt: {
+//           [Op.lt]: new Date() // Already expired
+//         }
+//       },
+//       transaction
+//     });
+
+//     if (expiredBatches.length === 0) {
+//       await transaction.commit();
+//       return { message: 'No expired batches found', count: 0 };
+//     }
+
+//     // Get all evaluator IDs with expired batches
+//     const expiredBatchIds = expiredBatches.map(batch => batch.BatchID);
+
+//     // Mark batches as inactive
+//     await CopyBatchAssignment.update(
+//       { IsActive: false },
+//       { 
+//         where: { BatchID: expiredBatchIds },
+//         transaction
+//       }
+//     );
+
+//     // Find all copy assignments for these batches that aren't checked
+//     const expiredAssignments = await CopyAssignments.findAll({
+//       where: {
+//         EvaluatorID: {
+//           [Op.in]: expiredBatches.map(batch => batch.EvaluatorID)
+//         },
+//         IsChecked: false
+//       },
+//       transaction
+//     });
+
+//     // Get all barcodes of expired assignments
+//     const expiredBarcodes = expiredAssignments.map(assignment => assignment.CopyBarcode);
+
+//     // Mark copies as unassigned in SubjectData
+//     if (expiredBarcodes.length > 0) {
+//       await SubjectData.update(
+//         { IsAssigned: false },
+//         { 
+//           where: { barcode: expiredBarcodes },
+//           transaction 
+//         }
+//       );
+
+//       // Delete the assignments
+//       await CopyAssignments.destroy({
+//         where: {
+//           AssignmentID: expiredAssignments.map(a => a.AssignmentID),
+//           BatchID: expiredAssignments.map(a => a.BatchID)
+//         },
+//         transaction
+//       });
+//     }
+
+//     await transaction.commit();
+
+//     return {
+//       message: 'Successfully reset expired batches',
+//       batchesReset: expiredBatches.length,
+//       assignmentsRemoved: expiredAssignments.length
+//     };
+//   } catch (error) {
+//     await transaction.rollback();
+//     console.error('Error in resetExpiredBatchesService:', error);
+//     throw error;
+//   }
+// };
 
 
 // Debug helper function

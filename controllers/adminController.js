@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, assignSubjectToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService } from "../services/adminService.js";
+import { adminLoginService, assignCopiesToEvaluator, assignSubjectToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -287,6 +287,49 @@ export const getSubjectAssignments = async (req, res) => {
     return res.status(500).json({ 
       error: "Failed to fetch subject assignments",
       message: error.message 
+    });
+  }
+};
+
+
+
+/**
+ * Unassign a subject from an evaluator
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const unassignSubject = async (req, res) => {
+  const { evaluatorId, subjectCode } = req.body;
+
+  // Validate request body
+  if (!evaluatorId || !subjectCode) {
+    return res.status(400).json({
+      error: "Invalid request. Please provide evaluatorId and subjectCode"
+    });
+  }
+
+  try {
+    const result = await unassignSubjectFromEvaluator(evaluatorId, subjectCode);
+    
+    console.log(`Subject unassigned successfully: Evaluator ID: ${evaluatorId}, Subject: ${subjectCode}`);
+    
+    return res.status(200).json({
+      message: "Subject unassigned successfully",
+      result
+    });
+  } catch (error) {
+    console.error("Error unassigning subject:", error.message);
+    
+    if (error.status) {
+      return res.status(error.status).json({
+        message: 'Error unassigning subject',
+        error: error.message
+      });
+    }
+    
+    return res.status(500).json({
+      message: 'Error unassigning subject',
+      error: 'Internal server error'
     });
   }
 };

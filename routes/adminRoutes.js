@@ -1,5 +1,5 @@
 import express from 'express';
-import { adminLogin, adminLogout, assignCopies, assignSubject, checkAdminAuth, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments } from '../controllers/adminController.js';
+import { adminLogin, adminLogout, assignCopies, assignSubject, checkAdminAuth, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments, unassignSubject } from '../controllers/adminController.js';
 import { adminProtected } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -16,6 +16,6 @@ router.get('/get-evaluated-copies', adminProtected, getEvaluatedCopies); //- Get
 //**New Routes for Subject Assignment to Evaluators*/
 router.post('/assign-subject', adminProtected, assignSubject);
 router.get('/subject-assignments', adminProtected, getSubjectAssignments);
-
+router.post('/unassign-subject', adminProtected, unassignSubject);
 
 export default router;
