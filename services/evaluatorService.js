@@ -6,6 +6,7 @@ import {
   CopyBatchAssignment,
   UserLogin,
   SubjectData,
+  CopyReevaluation,
 } from '../models/index.js';
 
 
@@ -665,268 +666,64 @@ export const checkAvailableCopies = async (subjectCode, examName) => {
 
 
 
-//? Below is old one
-// import { CopyBatchAssignment, SubjectAssignment, CopyAssignments } from '../models/index.js';
-// import { sequelize } from '../config/db.js';
-// import { Op } from 'sequelize';
-
-// /**
-//  * Get all subjects assigned to an evaluator
-//  * @param {string} evaluatorId - The evaluator's ID
-//  * @returns {Promise<Array>} - List of subjects assigned to the evaluator
-//  */
-// export const getEvaluatorSubjectsService = async (evaluatorId) => {
-//   try {
-//     const assignments = await SubjectAssignment.findAll({
-//       where: {
-//         EvaluatorID: evaluatorId,
-//         Active: true
-//       },
-//       attributes: ['AssignmentID', 'SubjectCode', 'ExamName', 'SlotName', 'AssignedAt']
-//     });
-
-//     return assignments.map(assignment => ({
-//       assignmentId: assignment.AssignmentID,
-//       subjectCode: assignment.SubjectCode,
-//       examName: assignment.ExamName,
-//       slotName: assignment.SlotName,
-//       assignedAt: assignment.AssignedAt
-//     }));
-//   } catch (error) {
-//     console.error('Error in getEvaluatorSubjectsService:', error);
-//     throw new Error(`Failed to retrieve assigned subjects: ${error.message}`);
-//   }
-// };
-
-// /**
-//  * Get an evaluator's current active batch
-//  * @param {string} evaluatorId - The evaluator's ID
-//  * @returns {Promise<Object|null>} - Current active batch or null if none exists
-//  */
-// export const getCurrentActiveBatchService = async (evaluatorId) => {
-//   try {
-//     // Find the evaluator's current active batch
-//     const activeBatch = await CopyBatchAssignment.findOne({
-//       where: {
-//         EvaluatorID: evaluatorId,
-//         IsActive: true,
-//         ExpiresAt: {
-//           [Op.gt]: new Date() // Not expired yet
-//         }
-//       },
-//       order: [['AssignedAt', 'DESC']]
-//     });
-
-//     if (!activeBatch) {
-//       return null;
-//     }
-
-//     // Get the copies assigned in this batch
-//     const copies = await CopyAssignments.findAll({
-//       where: {
-//         EvaluatorID: evaluatorId,
-//         BatchID: activeBatch.BatchID
-//       },
-//       attributes: ['AssignmentID', 'CopyBarcode', 'IsChecked', 'AssignedAt', 'CheckedAt']
-//     });
-
-//     return {
-//       batchId: activeBatch.BatchID,
-//       subjectCode: activeBatch.SubjectCode,
-//       examName: activeBatch.ExamName,
-//       slotName: activeBatch.SlotName,
-//       assignedAt: activeBatch.AssignedAt,
-//       expiresAt: activeBatch.ExpiresAt,
-//       remainingCopies: copies.filter(copy => !copy.IsChecked).length,
-//       completedCopies: copies.filter(copy => copy.IsChecked).length,
-//       totalCopies: copies.length,
-//       copies: copies.map(copy => ({
-//         assignmentId: copy.AssignmentID,
-//         copyBarcode: copy.CopyBarcode,
-//         isChecked: copy.IsChecked,
-//         assignedAt: copy.AssignedAt,
-//         checkedAt: copy.CheckedAt
-//       }))
-//     };
-//   } catch (error) {
-//     console.error('Error in getCurrentActiveBatchService:', error);
-//     throw new Error(`Failed to retrieve active batch: ${error.message}`);
-//   }
-// };
-
-// /**
-//  * Assign a new batch of copies to an evaluator
-//  * @param {string} evaluatorId - The evaluator's ID
-//  * @param {string} subjectCode - The subject code
-//  * @param {string} examName - The exam name
-//  * @param {string} slotName - The slot name
-//  * @param {number} batchSize - Number of copies to assign (default: 10)
-//  * @returns {Promise<Object>} - The newly created batch with assigned copies
-//  */
-// export const assignNewBatchService = async (evaluatorId, subjectCode, examName, batchSize = 10) => {
-//   const transaction = await sequelize.transaction();
+/**
+ * Submit re-evaluation results for a copy
+ * @param {string} requestId - ID of the re-evaluation request
+ * @param {string} evaluatorId - ID of the evaluator submitting results
+ * @param {number} reevaluatedMarks - The new marks assigned after re-evaluation
+ * @param {string} remarks - Comments or justification for the re-evaluation
+ * @returns {Promise<Object>} Updated re-evaluation request record
+ */
+export const submitReevaluationService = async (requestId, evaluatorId, reevaluatedMarks, remarks) => {
+  const transaction = await sequelize.transaction();
   
-//   try {
-//     // 1. Check if evaluator already has an active batch
-//     const existingActiveBatch = await CopyBatchAssignment.findOne({
-//       where: {
-//         EvaluatorID: evaluatorId,
-//         IsActive: true,
-//         ExpiresAt: {
-//           [Op.gt]: new Date()
-//         }
-//       },
-//       transaction
-//     });
+  try {
+    // Find the re-evaluation request and verify it exists
+    const reevalRequest = await CopyReevaluation.findOne({
+      where: {
+        RequestID: requestId,
+        Status: 'Assigned',
+        AssignedEvaluatorID: evaluatorId
+      },
+      transaction
+    });
 
-//     if (existingActiveBatch) {
-//       await transaction.rollback();
-//       throw new Error('You already have an active batch. Please complete or wait for it to expire.');
-//     }
+    if (!reevalRequest) {
+      await transaction.rollback();
+      const error = new Error(`No active re-evaluation request found with ID ${requestId} for evaluator ${evaluatorId}`);
+      error.status = 404;
+      throw error;
+    }
 
-//     // 2. Check if the subject is assigned to this evaluator
-//     const subjectAssignment = await SubjectAssignment.findOne({
-//       where: {
-//         EvaluatorID: evaluatorId,
-//         SubjectCode: subjectCode,
-//         ExamName: examName,
-//         SlotName: slotName,
-//         Active: true
-//       },
-//       transaction
-//     });
+    // Update the re-evaluation request with results
+    const updatedRequest = await reevalRequest.update({
+      Status: 'Completed',
+      ReevaluatedMarks: reevaluatedMarks,
+      Remarks: remarks,
+      SubmittedAt: new Date()
+    }, { transaction });
 
-//     console.log('subjectAssignment:', subjectAssignment);
-    
-//     if (!subjectAssignment) {
-//       await transaction.rollback();
-//       throw new Error('This subject is not assigned to you.');
-//     }
+    // Commit the transaction
+    await transaction.commit();
 
-//     // 3. Find unassigned copies for this subject - USING SQL SERVER SYNTAX
-//     const unassignedCopies = await sequelize.query(
-//       `SELECT TOP(:batchSize) c.copyid, c.subject_code 
-//        FROM tbl_copies c
-//        LEFT JOIN tbl_copy_assignments ca ON c.copyid = ca.CopyBarcode
-//        WHERE c.subject_code = :subjectCode
-//        AND c.exam_name = :examName
-//        AND c.slot_name = :slotName
-//        AND ca.AssignmentID IS NULL`,
-//       {
-//         replacements: { 
-//           subjectCode, 
-//           examName,
-//           slotName,
-//           batchSize 
-//         },
-//         type: sequelize.QueryTypes.SELECT,
-//         transaction
-//       }
-//     );
-
-//     if (unassignedCopies.length === 0) {
-//       await transaction.rollback();
-//       throw new Error('No unassigned copies available for this subject.');
-//     }
-
-//     // 4. Create a new batch
-//     const expiryDate = new Date();
-//     expiryDate.setHours(expiryDate.getHours() + 24); // 24 hour expiry
-    
-//     const newBatch = await CopyBatchAssignment.create({
-//       EvaluatorID: evaluatorId,
-//       SubjectCode: subjectCode,
-//       ExamName: examName,
-//       SlotName: slotName,
-//       AssignedAt: new Date(),
-//       ExpiresAt: expiryDate,
-//       IsActive: true
-//     }, { transaction });
-
-//     // 5. Assign copies to the evaluator with batch ID
-//     const copyAssignments = unassignedCopies.map(copy => ({
-//       CopyBarcode: copy.copyid,
-//       EvaluatorID: evaluatorId,
-//       AssignedBy: evaluatorId, // Self-assigned
-//       AssignedAt: new Date(),
-//       IsChecked: false,
-//       BatchID: newBatch.BatchID
-//     }));
-
-//     await CopyAssignments.bulkCreate(copyAssignments, { 
-//       transaction,
-//       fields: ['CopyBarcode', 'EvaluatorID', 'AssignedBy', 'AssignedAt', 'IsChecked', 'BatchID']
-//     });
-
-//     await transaction.commit();
-
-//     // Return the complete batch information
-//     return {
-//       batchId: newBatch.BatchID,
-//       subjectCode,
-//       examName,
-//       slotName,
-//       assignedAt: newBatch.AssignedAt,
-//       expiresAt: newBatch.ExpiresAt,
-//       totalCopies: copyAssignments.length,
-//       copies: copyAssignments.map(copy => ({
-//         copyBarcode: copy.CopyBarcode,
-//         isChecked: false,
-//         assignedAt: copy.AssignedAt
-//       }))
-//     };
-//   } catch (error) {
-//     await transaction.rollback();
-//     console.error('Error in assignNewBatchService:', error);
-//     throw error;
-//   }
-// };
+    return {
+      requestId: updatedRequest.RequestID,
+      copyId: updatedRequest.CopyID,
+      status: updatedRequest.Status,
+      reevaluatedMarks: updatedRequest.ReevaluatedMarks,
+      originalEvaluatorId: updatedRequest.OriginalEvaluatorID,
+      assignedEvaluatorId: updatedRequest.AssignedEvaluatorID,
+      submittedAt: updatedRequest.SubmittedAt,
+      remarks: updatedRequest.Remarks
+    };
+  } catch (error) {
+    if (transaction.finished !== 'rollback') {
+      await transaction.rollback();
+    }
+    console.error('Error in submitReevaluationService:', error);
+    throw error;
+  }
+};
 
 
 
-
-
-
-// /**
-//  * Setup a scheduled task to expire batches
-//  */
-// export const setupBatchExpiryTask = () => {
-//   // This should be set up when the server starts
-//   setInterval(async () => {
-//     try {
-//       // Find expired batches and mark them inactive
-//       await CopyBatchAssignment.update(
-//         { IsActive: false },
-//         {
-//           where: {
-//             IsActive: true,
-//             ExpiresAt: {
-//               [Op.lt]: new Date()
-//             }
-//           }
-//         }
-//       );
-
-//       // Unassign copies from expired batches
-//       const expiredBatches = await CopyBatchAssignment.findAll({
-//         where: {
-//           IsActive: false,
-//           CompletedAt: null
-//         }
-//       });
-
-//       for (const batch of expiredBatches) {
-//         await CopyAssignments.destroy({
-//           where: {
-//             BatchID: batch.BatchID,
-//             IsChecked: false // Only delete assignments that weren't checked
-//           }
-//         });
-//       }
-
-//       console.log('Expired batches processed successfully');
-//     } catch (error) {
-//       console.error('Error processing expired batches:', error);
-//     }
-//   }, 15 * 60 * 1000); // Run every 15 minutes
-// };

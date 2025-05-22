@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, assignSubjectToEvaluator, EvaluatedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, unassignSubjectFromEvaluator } from "../services/adminService.js";
+import { adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, EvaluatedCopiesService, getAssignedReevaluationsService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -333,3 +333,73 @@ export const unassignSubject = async (req, res) => {
     });
   }
 };
+
+
+
+/**
+ * Assign a copy to an evaluator for re-evaluation
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const assignCopyReevaluation = async (req, res) => {
+  const { copyId, assignedEvaluatorId } = req.body;
+
+  // Validate request body
+  if (!copyId || !assignedEvaluatorId) {
+    return res.status(400).json({ error: "Invalid request. Please provide copyId and assignedEvaluatorId" });
+  }
+
+  try {
+    const result = await assignCopyReevaluationService(copyId, assignedEvaluatorId);
+
+    console.log(`Reevaluation request submitted successfully: Copy ID: ${copyId}`);
+    
+    // Return success response with result
+    return res.status(200).json({ 
+      message: "Reevaluation request submitted successfully", 
+      result 
+    });
+  } catch (error) {
+    // Log the error
+    console.error("Error submitting reevaluation request:", error.message);
+    
+    // Return error response
+    if (error.status) {
+      return res.status(error.status).json({ 
+        message: 'Error submitting reevaluation request', 
+        error: error.message 
+      });
+    }
+    return res.status(500).json({ 
+      message: 'Error submitting reevaluation request', 
+      error: 'Internal server error' 
+    });
+  }
+}
+
+
+/**
+ * Get all reevaluation assignments
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getAssignedReevaluations = async (req, res) => {
+  try {
+    const reevaluations = await getAssignedReevaluationsService();
+    
+    return res.status(200).json({
+      message: "Successfully retrieved reevaluation assignments",
+      reevaluations,
+      count: reevaluations.length
+    });
+  } catch (error) {
+    console.error("Error fetching reevaluation assignments:", error.message);
+    
+    return res.status(500).json({ 
+      error: "Failed to fetch reevaluation assignments",
+      message: error.message 
+    });
+  }
+};
+
+

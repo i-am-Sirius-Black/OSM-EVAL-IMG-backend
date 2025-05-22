@@ -14,6 +14,7 @@ import defineCopyBatchAssignment from './CopyBatchAssignment.js';
 import defineSubjectAssignment from './SubjectAssignments.js';
 import defineSubjectData from './SubjectData.js';
 import defineVwSubjectData from './VwSubjectData.js';
+import defineReevaluationRequest from './CopyReevaluation.js';
 
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
@@ -26,7 +27,7 @@ export const EvaluationAutosave = defineEvaluationAutosave(sequelize);
 export const CopyBatchAssignment = defineCopyBatchAssignment(sequelize);
 export const SubjectAssignment = defineSubjectAssignment(sequelize);
 export const SubjectData = defineSubjectData(sequelize);
-// export const VwSubjectData = defineVwSubjectData(sequelize);
+export const CopyReevaluation = defineReevaluationRequest(sequelize);
 
 export const Bagging = defineBagging(evalSequelize);
 export const CopyGunning = defineCopyGunning(evalSequelize);

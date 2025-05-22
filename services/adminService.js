@@ -1,4 +1,4 @@
-import { CopyAssignments, CopyBatchAssignment, CopyEval, SubjectAssignment, UserLogin } from "../models/index.js";
+import { CopyAssignments, CopyBatchAssignment, CopyEval, CopyReevaluation, SubjectAssignment, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -387,8 +387,44 @@ export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examNam
  * Get all subjects assigned to evaluators
  * @returns {Promise<Array>} - List of subject assignments with evaluator details
  */
+// export const getSubjectAssignmentsService = async () => {
+//   try {
+//     const assignments = await SubjectAssignment.findAll({
+//       where: { Active: true },
+//       include: [
+//         {
+//           model: UserLogin,
+//           attributes: ['Name', 'Email'],
+//           required: false
+//         }
+//       ]
+//     });
+
+//     return assignments.map(assignment => ({
+//       assignmentId: assignment.AssignmentID,
+//       subjectCode: assignment.SubjectCode,
+//       examName: assignment.ExamName,
+//       evaluatorId: assignment.EvaluatorID,
+//       evaluatorName: assignment.UserLogin?.Name || 'Unknown',
+//       evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
+//       assignedBy: assignment.AssignedBy,
+//       assignedAt: assignment.AssignedAt,
+//       active: assignment.Active
+//     }));
+//   } catch (error) {
+//     console.error('Error in getSubjectAssignmentsService:', error);
+//     throw new Error(`Failed to retrieve subject assignments: ${error.message}`);
+//   }
+// };
+
+
+/**
+ * Get all subjects assigned to evaluators with active batch status
+ * @returns {Promise<Array>} - List of subject assignments with evaluator details and batch status
+ */
 export const getSubjectAssignmentsService = async () => {
   try {
+    // Get all active subject assignments with evaluator info
     const assignments = await SubjectAssignment.findAll({
       where: { Active: true },
       include: [
@@ -400,22 +436,43 @@ export const getSubjectAssignmentsService = async () => {
       ]
     });
 
-    return assignments.map(assignment => ({
-      assignmentId: assignment.AssignmentID,
-      subjectCode: assignment.SubjectCode,
-      examName: assignment.ExamName,
-      evaluatorId: assignment.EvaluatorID,
-      evaluatorName: assignment.UserLogin?.Name || 'Unknown',
-      evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
-      assignedBy: assignment.AssignedBy,
-      assignedAt: assignment.AssignedAt,
-      active: assignment.Active
-    }));
+    // Get all active batches in a separate query
+    const activeBatches = await CopyBatchAssignment.findAll({
+      where: { IsActive: true },
+      attributes: ['EvaluatorID', 'SubjectCode'],
+      raw: true
+    });
+
+    // Create a simple lookup map for quick batch status checking
+    const activeBatchMap = {};
+    activeBatches.forEach(batch => {
+      const key = `${batch.EvaluatorID}:${batch.SubjectCode}`;
+      activeBatchMap[key] = true;
+    });
+
+    // Map assignments with batch status check
+    return assignments.map(assignment => {
+      const key = `${assignment.EvaluatorID}:${assignment.SubjectCode}`;
+      
+      return {
+        assignmentId: assignment.AssignmentID,
+        subjectCode: assignment.SubjectCode,
+        examName: assignment.ExamName,
+        evaluatorId: assignment.EvaluatorID,
+        evaluatorName: assignment.UserLogin?.Name || 'Unknown',
+        evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
+        assignedBy: assignment.AssignedBy,
+        assignedAt: assignment.AssignedAt,
+        active: assignment.Active,
+        hasActiveBatch: !!activeBatchMap[key] // Will be true if key exists in map
+      };
+    });
   } catch (error) {
     console.error('Error in getSubjectAssignmentsService:', error);
     throw new Error(`Failed to retrieve subject assignments: ${error.message}`);
   }
 };
+
 
 
 
@@ -483,3 +540,126 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
 
 
 
+/**
+ * Assign a copy to an evaluator for re-evaluation
+ * @param {string} copyId - ID of the copy to be re-evaluated
+ * @param {string} assignedEvaluatorId - ID of the evaluator assigned for re-evaluation
+ * @returns {Promise<Object>} Created re-evaluation request record
+ */
+export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // First check if this copy already has an active re-evaluation request
+    const existingRequest = await CopyReevaluation.findOne({
+      where: {
+        CopyID: copyId,
+        Status: {
+          [Op.in]: ['Pending', 'Assigned'] // Active statuses
+        }
+      },
+      transaction
+    });
+
+    if (existingRequest) {
+      await transaction.rollback();
+      const error = new Error(`Copy ${copyId} already has an active re-evaluation request`);
+      error.status = 409; // Conflict
+      throw error;
+    }
+
+    // Verify the evaluator exists and is active
+    const evaluator = await UserLogin.findOne({
+      where: {
+        Uid: assignedEvaluatorId,
+        Role: 'evaluator',
+        Active: true
+      },
+      transaction
+    });
+
+    if (!evaluator) {
+      await transaction.rollback();
+      const error = new Error(`Evaluator with ID ${assignedEvaluatorId} not found or not active`);
+      error.status = 404;
+      throw error;
+    }
+    
+    // Verify the copy exists
+    const copyExists = await SubjectData.findOne({
+      where: {
+        barcode: copyId
+      },
+      transaction
+    });
+    
+    if (!copyExists) {
+      await transaction.rollback();
+      const error = new Error(`Copy with ID ${copyId} not found`);
+      error.status = 404;
+      throw error;
+    }
+
+    // Create a new re-evaluation request
+    const reevaluationRequest = await CopyReevaluation.create({
+      CopyID: copyId,
+      Status: 'Assigned',
+      AssignedEvaluatorID: assignedEvaluatorId,
+      AssignedAt: new Date(),
+      Reason: 'Administrative re-evaluation request'
+    }, { transaction });
+
+    // Commit the transaction
+    await transaction.commit();
+
+    return {
+      requestId: reevaluationRequest.RequestID,
+      copyId: reevaluationRequest.CopyID,
+      evaluatorId: reevaluationRequest.AssignedEvaluatorID,
+      status: reevaluationRequest.Status,
+      assignedAt: reevaluationRequest.AssignedAt
+    };
+  } catch (error) {
+    // Make sure to rollback if not already done
+    if (transaction.finished !== 'rollback') {
+      await transaction.rollback();
+    }
+    console.error('Error in assignCopyReevaluationService:', error);
+    throw error; 
+  }
+};
+
+
+
+/**
+ * Get all assigned reevaluations
+ * @returns {Promise<Array>} - List of all reevaluation assignments with details
+ */
+export const getAssignedReevaluationsService = async () => {
+  try {
+    // Find all reevaluation requests with their evaluator information
+    const reevaluations = await CopyReevaluation.findAll();
+
+    if (!reevaluations || reevaluations.length === 0) {
+      return [];
+    }
+
+    // Format the data for API response
+    return reevaluations.map(request => ({
+      requestId: request.RequestID,
+      copyId: request.CopyID,
+      status: request.Status,
+      reason: request.Reason,
+      evaluatorId: request.AssignedEvaluatorID,
+      evaluatorName: request.Evaluator?.Name || 'Unknown',
+      evaluatorEmail: request.Evaluator?.Email || 'Unknown',
+      assignedAt: request.AssignedAt,
+      submittedAt: request.SubmittedAt,
+      reevaluatedMarks: request.ReevaluatedMarks,
+      remarks: request.Remarks
+    }));
+  } catch (error) {
+    console.error('Error in getAssignedReevaluationsService:', error);
+    throw new Error(`Failed to retrieve reevaluation assignments: ${error.message}`);
+  }
+};

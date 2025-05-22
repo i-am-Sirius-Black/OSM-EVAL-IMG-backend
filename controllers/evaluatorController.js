@@ -1,4 +1,4 @@
-import { checkAvailableCopies } from '../services/evaluatorService.js';
+import { checkAvailableCopies, submitReevaluationService } from '../services/evaluatorService.js';
 import { 
   getEvaluatorSubjectsService, 
   getCurrentActiveBatchService, 
@@ -194,105 +194,57 @@ export const checkCopies = async (req, res) => {
 
 
 
+/**
+ * Submit re-evaluation results
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const submitReevaluation = async (req, res) => {
+  const { requestId, reevaluatedMarks, remarks } = req.body;
+  const evaluatorId = req.user.uid; // Get from authenticated user
 
-//?Below is old one
-// import { 
-//   getEvaluatorSubjectsService, 
-//   getCurrentActiveBatchService, 
-//   assignNewBatchService 
-// } from '../services/evaluatorServive.js';
+  // Validate request body
+  if (!requestId || reevaluatedMarks === undefined) {
+    return res.status(400).json({ 
+      error: "Invalid request. Please provide requestId and reevaluatedMarks" 
+    });
+  }
 
-// /**
-//  * Get all subjects assigned to the evaluator
-//  * @param {Object} req - Express request object
-//  * @param {Object} res - Express response object
-//  */
-// export const getAssignedSubjects = async (req, res) => {
-//   try {
-//     const evaluatorId = req.user.uid;
-//     const subjects = await getEvaluatorSubjectsService(evaluatorId);
-    
-//     return res.status(200).json({
-//       message: "Successfully retrieved assigned subjects",
-//       subjects,
-//       count: subjects.length
-//     });
-//   } catch (error) {
-//     console.error("Error fetching assigned subjects:", error.message);
-    
-//     return res.status(500).json({ 
-//       error: "Failed to fetch assigned subjects",
-//       message: error.message 
-//     });
-//   }
-// };
+  // Validate marks is a number
+  if (isNaN(parseFloat(reevaluatedMarks))) {
+    return res.status(400).json({ 
+      error: "Marks must be a valid number" 
+    });
+  }
 
-// /**
-//  * Get evaluator's current active batch if any
-//  * @param {Object} req - Express request object
-//  * @param {Object} res - Express response object
-//  */
-// export const getCurrentBatch = async (req, res) => {
-//   try {
-//     const evaluatorId = req.user.uid;
-//     const batch = await getCurrentActiveBatchService(evaluatorId);
+  try {
+    const result = await submitReevaluationService(
+      requestId, 
+      evaluatorId, 
+      parseFloat(reevaluatedMarks), 
+      remarks || ""
+    );
     
-//     if (!batch) {
-//       return res.status(200).json({
-//         message: "No active batch found",
-//         hasBatch: false
-//       });
-//     }
+    console.log(`Re-evaluation completed successfully for request ID: ${requestId}`);
     
-//     return res.status(200).json({
-//       message: "Successfully retrieved active batch",
-//       hasBatch: true,
-//       batch
-//     });
-//   } catch (error) {
-//     console.error("Error fetching active batch:", error.message);
+    return res.status(200).json({ 
+      message: "Re-evaluation completed successfully", 
+      result 
+    });
+  } catch (error) {
+    console.error("Error submitting re-evaluation:", error.message);
     
-//     return res.status(500).json({ 
-//       error: "Failed to fetch active batch",
-//       message: error.message 
-//     });
-//   }
-// };
+    if (error.status) {
+      return res.status(error.status).json({ 
+        message: 'Error submitting re-evaluation', 
+        error: error.message 
+      });
+    }
+    return res.status(500).json({ 
+      message: 'Error submitting re-evaluation', 
+      error: 'Internal server error' 
+    });
+  }
+};
 
-// /**
-//  * Assign a new batch of copies to the evaluator
-//  * @param {Object} req - Express request object
-//  * @param {Object} res - Express response object
-//  */
-// export const assignNewBatch = async (req, res) => {
-//   const { subjectCode, examName, slotName, batchSize } = req.body;
-//   const evaluatorId = req.user.uid;
-  
-//   if (!subjectCode || !examName || !slotName) {
-//     return res.status(400).json({ 
-//       error: "Invalid request. Please provide subjectCode, examName, and slotName" 
-//     });
-//   }
-  
-//   try {
-//     const batch = await assignNewBatchService(
-//       evaluatorId, 
-//       subjectCode, 
-//       examName, 
-//       slotName, 
-//       batchSize || 10
-//     );
-    
-//     return res.status(200).json({
-//       message: "Successfully assigned new batch of copies",
-//       batch
-//     });
-//   } catch (error) {
-//     console.error("Error assigning new batch:", error.message);
-    
-//     return res.status(400).json({ 
-//       error: "Failed to assign new batch",
-//       message: error.message 
-//     });
-//   }
-// };
+
