@@ -88,29 +88,62 @@ export const getCurrentActiveBatchService = async (evaluatorId, subjectCode = nu
       return null;
     }
 
-    // Get copies from this active batch
-    const activeCopies = await CopyAssignments.findAll({
-      where: {
-        EvaluatorID: evaluatorId,
-        IsChecked: false,
-        BatchID: activeBatch.BatchID // This ensures we only get copies from this batch
-      },
-      attributes: ['AssignmentID', 'CopyBarcode', 'AssignedAt']
-    });
+    // // Get copies from this active batch
+    // const activeCopies = await CopyAssignments.findAll({
+    //   where: {
+    //     EvaluatorID: evaluatorId,
+    //     IsChecked: false,
+    //     BatchID: activeBatch.BatchID // This ensures we only get copies from this batch
+    //   },
+    //   attributes: ['AssignmentID', 'CopyBarcode', 'AssignedAt']
+    // });
 
-    return {
-      batchId: activeBatch.BatchID,
-      subjectCode: activeBatch.SubjectCode,
-      examName: activeBatch.ExamName,
-      assignedAt: activeBatch.AssignedAt,
-      expiresAt: activeBatch.ExpiresAt,
-      copies: activeCopies.map(copy => ({
-        assignmentId: copy.AssignmentID,
-        copyBarcode: copy.CopyBarcode,
-        assignedAt: copy.AssignedAt,
-        isChecked: copy.IsChecked
-      }))
-    };
+    // return {
+    //   batchId: activeBatch.BatchID,
+    //   subjectCode: activeBatch.SubjectCode,
+    //   examName: activeBatch.ExamName,
+    //   assignedAt: activeBatch.AssignedAt,
+    //   expiresAt: activeBatch.ExpiresAt,
+    //   copies: activeCopies.map(copy => ({
+    //     assignmentId: copy.AssignmentID,
+    //     copyBarcode: copy.CopyBarcode,
+    //     assignedAt: copy.AssignedAt,
+    //     isChecked: copy.IsChecked
+    //   }))
+    // };
+
+
+    // Get ALL copies for the current active batch
+const allBatchCopies = await CopyAssignments.findAll({
+  where: {
+    EvaluatorID: evaluatorId,
+    BatchID: activeBatch.BatchID // Get all copies from this batch
+  },
+  attributes: ['AssignmentID', 'CopyBarcode', 'AssignedAt', 'IsChecked']
+});
+
+// Calculate counts
+const checkedCount = allBatchCopies.filter(copy => copy.IsChecked).length;
+const pendingCount = allBatchCopies.filter(copy => !copy.IsChecked).length;
+const totalCount = allBatchCopies.length;
+
+return {
+  batchId: activeBatch.BatchID,
+  subjectCode: activeBatch.SubjectCode,
+  examName: activeBatch.ExamName,
+  assignedAt: activeBatch.AssignedAt,
+  expiresAt: activeBatch.ExpiresAt,
+  checkedCount,
+  pendingCount,
+  totalCount,
+  copies: allBatchCopies.map(copy => ({
+    assignmentId: copy.AssignmentID,
+    copyBarcode: copy.CopyBarcode,
+    assignedAt: copy.AssignedAt,
+    isChecked: copy.IsChecked
+  }))
+};
+
   } catch (error) {
     console.error('Error in getCurrentActiveBatchService:', error);
     throw new Error(`Failed to check for active batch: ${error.message}`);
@@ -726,4 +759,67 @@ export const submitReevaluationService = async (requestId, evaluatorId, reevalua
 };
 
 
+
+/**
+ * Get all reevaluation requests assigned to an evaluator
+ * @param {string} evaluatorId - ID of the evaluator
+ * @returns {Promise<Array>} - List of reevaluation requests assigned to the evaluator
+ */
+export const getEvaluatorReevaluationsService = async (evaluatorId) => {
+  try {
+    // Find all reevaluation requests assigned to this evaluator with status 'Assigned'
+    const requests = await CopyReevaluation.findAll({
+      where: {
+        AssignedEvaluatorID: evaluatorId,
+        Status: 'Assigned' // Only get active assignments
+      },
+      include: [
+        {
+          model: SubjectData,
+          as: 'CopyDetails',
+          attributes: ['SubjectID', 'Subject', 'Course', 'barcode'], // Use correct column names from your model
+          required: false
+        }
+      ]
+    });
+
+    if (!requests || requests.length === 0) {
+      return [];
+    }
+
+    // Format the data for API response with correct property mappings
+    return requests.map(request => ({
+      requestId: request.RequestID,
+      copyId: request.CopyID,
+      assignedAt: request.AssignedAt,
+      reason: request.Reason,
+      status: request.Status,
+      subjectCode: request.CopyDetails?.SubjectID, // Map to the actual column name
+      subjectName: request.CopyDetails?.Subject || 'Unknown Subject', // Map to the actual column name
+      examName: request.CopyDetails?.Course || 'Unknown Exam', // Map to the actual column name
+      courseName: request.CopyDetails?.Course || 'Unknown Course' // Use Course directly
+    }));
+  } catch (error) {
+    console.error('Error in getEvaluatorReevaluationsService:', error);
+    throw new Error(`Failed to retrieve reevaluation assignments: ${error.message}`);
+  }
+};
+
+/**
+ * Helper function to extract course name from subject code
+ * @param {string} subjectCode - The subject code
+ * @returns {string} - Course name
+ */
+const getCourseNameFromSubjectCode = (subjectCode) => {
+  // This is a placeholder implementation - modify based on your actual subject code format
+  if (!subjectCode) return 'Unknown Course';
+  
+  // Example implementation assuming subject codes follow a pattern like "CS101-BTECH"
+  const parts = subjectCode.split('-');
+  if (parts.length > 1) {
+    return parts[1];
+  }
+  
+  return 'General Course';
+};
 

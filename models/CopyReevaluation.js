@@ -20,7 +20,7 @@ const defineReevaluationRequest = (sequelize) => {
       allowNull: true,
     },
     AssignedEvaluatorID: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING,
       allowNull: true,
     },
     ReevaluatedMarks: {

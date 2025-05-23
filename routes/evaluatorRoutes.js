@@ -1,5 +1,5 @@
 import express from 'express';
-import { assignNewBatch, checkCopies, completeCopyEvaluation, getAssignedSubjects, getCurrentBatch, startCopyEvaluation, submitReevaluation } from '../controllers/evaluatorController.js';
+import { assignNewBatch, checkAssignedReeval, checkCopies, completeCopyEvaluation, getAssignedSubjects, getCurrentBatch, startCopyEvaluation, submitReevaluation } from '../controllers/evaluatorController.js';
 import { userProtected } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -31,5 +31,8 @@ router.get('/check-copies', checkCopies);
 
 // Submit reevaluated copy (that was assigned to you) 
 router.post('/submit-reevaluation', submitReevaluation);
+
+// Check if a evaluator has been assigned with Reeval Copy
+router.get('/check-reeval-assigned', checkAssignedReeval)
 
 export default router;

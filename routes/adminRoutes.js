@@ -1,5 +1,5 @@
 import express from 'express';
-import { adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, getAssignedReevaluations, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments, unassignSubject } from '../controllers/adminController.js';
+import { adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, getAssignedReevaluations, getCheckedCopies, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments, registerEvaluator, unassignSubject } from '../controllers/adminController.js';
 import { adminProtected } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -17,7 +17,12 @@ router.get('/get-evaluated-copies', adminProtected, getEvaluatedCopies); //- Get
 router.post('/assign-subject', adminProtected, assignSubject);
 router.get('/subject-assignments', adminProtected, getSubjectAssignments);
 router.post('/unassign-subject', adminProtected, unassignSubject);
+
+router.post('/register-evaluator', adminProtected, registerEvaluator);
+
+//*New routes for reevaluation */
 router.post('/assign-reevaluation', adminProtected, assignCopyReevaluation);
 router.get('/reevaluation-assignments', adminProtected, getAssignedReevaluations);
+router.get('/checked-copies/:packingId', adminProtected, getCheckedCopies);
 
 export default router;

@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, EvaluatedCopiesService, getAssignedReevaluationsService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, unassignSubjectFromEvaluator } from "../services/adminService.js";
+import { adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -403,3 +403,86 @@ export const getAssignedReevaluations = async (req, res) => {
 };
 
 
+
+{/*--Evaluator Registration--*/}
+
+/**
+ * Register a new evaluator (Admin only endpoint)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const registerEvaluator = async (req, res) => {
+  const { name, email, phone } = req.body;
+  
+  try {
+    // Make sure the request is coming from an admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "Not authorized to register evaluators"
+      });
+    }
+    
+    // Call the service to register the evaluator
+    const result = await registerEvaluatorService(name, email, phone);
+    
+    // Log the success (but not the password for security)
+    console.log(`Evaluator registered successfully: ${result.name} (${result.uid})`);
+    
+    // Return the credentials to the admin
+    return res.status(201).json({
+      success: true,
+      message: "Evaluator registered successfully",
+      uid: result.uid,
+      password: result.password,
+      name: result.name,
+      email: result.email
+    });
+  } catch (error) {
+    console.error("Error in registerEvaluator controller:", error);
+    
+    // Return appropriate error based on status code
+    const statusCode = error.status || 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: error.message || "Failed to register evaluator"
+    });
+  }
+};
+
+
+//** Get Checked Copies */
+
+/**
+ * Get all checked copies by packing ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getCheckedCopies = async (req, res) => {
+  try {
+    const { packingId } = req.params;
+    
+    if (!packingId) {
+      return res.status(400).json({
+        success: false,
+        error: "Packing ID is required"
+      });
+    }
+    
+    const result = await getCheckedCopiesService(packingId);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Successfully retrieved checked copies information",
+      data: result
+    });
+    
+  } catch (error) {
+    console.error("Error retrieving checked copies:", error);
+    
+    return res.status(error.status || 500).json({
+      success: false,
+      error: error.message || "Error retrieving checked copies"
+    });
+  }
+};

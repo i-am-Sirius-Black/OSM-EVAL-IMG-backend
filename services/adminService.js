@@ -1,8 +1,9 @@
-import { CopyAssignments, CopyBatchAssignment, CopyEval, CopyReevaluation, SubjectAssignment, UserLogin } from "../models/index.js";
+import { Bagging, CopyAssignments, CopyBatchAssignment, CopyEval, CopyGunning, CopyReevaluation, SubjectAssignment, SubjectData, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
 import { sequelize } from "../config/db.js";
+import { Op } from "sequelize";
 
 
 
@@ -542,63 +543,77 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
 
 /**
  * Assign a copy to an evaluator for re-evaluation
- * @param {string} copyId - ID of the copy to be re-evaluated
- * @param {string} assignedEvaluatorId - ID of the evaluator assigned for re-evaluation
- * @returns {Promise<Object>} Created re-evaluation request record
+ * @param {string} copyId
+ * @param {string} assignedEvaluatorId
+ * @returns {Promise<Object>} 
  */
 export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId) => {
-  const transaction = await sequelize.transaction();
+  let transaction;
   
   try {
-    // First check if this copy already has an active re-evaluation request
+    // First check if the copy is evaluated (outside transaction)
+    const isEvaluated = await CopyEval.findOne({
+      where: {
+        copyid: copyId,
+        del: 0,
+        status: 'Evaluated' // Ensure the copy is fully evaluated
+      }
+    });
+
+    if (!isEvaluated) {
+      const error = new Error(`Copy ${copyId} has not been evaluated yet and cannot be re-evaluated`);
+      error.status = 400; // Bad Request
+      throw error;
+    }
+
+    // Check for existing requests (outside transaction)
     const existingRequest = await CopyReevaluation.findOne({
       where: {
         CopyID: copyId,
         Status: {
           [Op.in]: ['Pending', 'Assigned'] // Active statuses
         }
-      },
-      transaction
+      }
     });
 
     if (existingRequest) {
-      await transaction.rollback();
       const error = new Error(`Copy ${copyId} already has an active re-evaluation request`);
       error.status = 409; // Conflict
       throw error;
     }
 
-    // Verify the evaluator exists and is active
+    // Verify the evaluator exists (outside transaction)
     const evaluator = await UserLogin.findOne({
       where: {
         Uid: assignedEvaluatorId,
         Role: 'evaluator',
         Active: true
-      },
-      transaction
+      }
     });
 
     if (!evaluator) {
-      await transaction.rollback();
       const error = new Error(`Evaluator with ID ${assignedEvaluatorId} not found or not active`);
       error.status = 404;
       throw error;
     }
     
-    // Verify the copy exists
+    // Verify the copy exists (outside transaction)
     const copyExists = await SubjectData.findOne({
       where: {
         barcode: copyId
-      },
-      transaction
+      }
     });
     
     if (!copyExists) {
-      await transaction.rollback();
       const error = new Error(`Copy with ID ${copyId} not found`);
       error.status = 404;
       throw error;
     }
+
+    // Start the transaction only for the insert operation
+    transaction = await sequelize.transaction();
+    
+    console.log("Starting transaction for reevaluation assignment");
 
     // Create a new re-evaluation request
     const reevaluationRequest = await CopyReevaluation.create({
@@ -606,28 +621,149 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
       Status: 'Assigned',
       AssignedEvaluatorID: assignedEvaluatorId,
       AssignedAt: new Date(),
-      Reason: 'Administrative re-evaluation request'
+      Reason: 'Administrative re-evaluation request',
+      OriginalEvaluatorID: isEvaluated.eval_id,
+      OriginalMarks: isEvaluated.obt_mark
     }, { transaction });
 
     // Commit the transaction
     await transaction.commit();
+    console.log("Transaction committed successfully");
 
     return {
       requestId: reevaluationRequest.RequestID,
       copyId: reevaluationRequest.CopyID,
       evaluatorId: reevaluationRequest.AssignedEvaluatorID,
       status: reevaluationRequest.Status,
-      assignedAt: reevaluationRequest.AssignedAt
+      assignedAt: reevaluationRequest.AssignedAt,
+      originalMarks: reevaluationRequest.OriginalMarks,
+      originalEvaluatorId: reevaluationRequest.OriginalEvaluatorID
     };
   } catch (error) {
-    // Make sure to rollback if not already done
-    if (transaction.finished !== 'rollback') {
-      await transaction.rollback();
-    }
     console.error('Error in assignCopyReevaluationService:', error);
+    
+    // Only try to rollback if we have an active transaction
+    if (transaction && !transaction.finished) {
+      try {
+        console.log("Rolling back transaction due to error");
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+      }
+    }
+    
     throw error; 
   }
 };
+
+
+// /**
+//  * Assign a copy to an evaluator for re-evaluation
+//  * @param {string} copyId
+//  * @param {string} assignedEvaluatorId
+//  * @returns {Promise<Object>} 
+//  */
+// export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId) => {
+//   const transaction = await sequelize.transaction();
+// console.log("Reevaluation form data->", copyId, assignedEvaluatorId);
+
+//   try {
+//     // Check if copyid exists in copyeval (means it's evaluated, then only we'll allow reeval)
+//     const isEvaluated = await CopyEval.findOne({
+//       where: {
+//         copyid: copyId,
+//         del: 0,
+//         status: 'Evaluated' // Ensure the copy is fully evaluated
+//       },
+//       transaction
+//     });
+
+//     if (!isEvaluated) {
+//       await transaction.rollback();
+//       const error = new Error(`Copy ${copyId} has not been evaluated yet and cannot be re-evaluated`);
+//       error.status = 400; // Bad Request
+//       throw error;
+//     }
+
+//     // First check if this copy already has an active re-evaluation request
+//     const existingRequest = await CopyReevaluation.findOne({
+//       where: {
+//         CopyID: copyId,
+//         Status: {
+//           [Op.in]: ['Pending', 'Assigned'] // Active statuses
+//         }
+//       },
+//       transaction
+//     });
+
+//     if (existingRequest) {
+//       await transaction.rollback();
+//       const error = new Error(`Copy ${copyId} already has an active re-evaluation request`);
+//       error.status = 409; // Conflict
+//       throw error;
+//     }
+
+//     // Verify the evaluator exists and is active
+//     const evaluator = await UserLogin.findOne({
+//       where: {
+//         Uid: assignedEvaluatorId,
+//         Role: 'evaluator',
+//         Active: true
+//       },
+//       transaction
+//     });
+
+//     if (!evaluator) {
+//       await transaction.rollback();
+//       const error = new Error(`Evaluator with ID ${assignedEvaluatorId} not found or not active`);
+//       error.status = 404;
+//       throw error;
+//     }
+    
+//     // Verify the copy exists
+//     const copyExists = await SubjectData.findOne({
+//       where: {
+//         barcode: copyId
+//       },
+//       transaction
+//     });
+    
+//     if (!copyExists) {
+//       await transaction.rollback();
+//       const error = new Error(`Copy with ID ${copyId} not found`);
+//       error.status = 404;
+//       throw error;
+//     }
+
+//     // Create a new re-evaluation request
+//     const reevaluationRequest = await CopyReevaluation.create({
+//       CopyID: copyId,
+//       Status: 'Assigned',
+//       AssignedEvaluatorID: assignedEvaluatorId,
+//       AssignedAt: new Date(),
+//       Reason: 'Administrative re-evaluation request',
+//     }, { transaction });
+
+//     // Commit the transaction
+//     await transaction.commit();
+
+//     return {
+//       requestId: reevaluationRequest.RequestID,
+//       copyId: reevaluationRequest.CopyID,
+//       evaluatorId: reevaluationRequest.AssignedEvaluatorID,
+//       status: reevaluationRequest.Status,
+//       assignedAt: reevaluationRequest.AssignedAt,
+//     };
+//   } catch (error) {
+//     // Make sure to rollback if not already done
+//     if (transaction.finished !== 'rollback') {
+//       await transaction.rollback();
+//     }
+//     console.error('Error in assignCopyReevaluationService:', error);
+//     throw error; 
+//   }
+// };
+
 
 
 
@@ -651,8 +787,6 @@ export const getAssignedReevaluationsService = async () => {
       status: request.Status,
       reason: request.Reason,
       evaluatorId: request.AssignedEvaluatorID,
-      evaluatorName: request.Evaluator?.Name || 'Unknown',
-      evaluatorEmail: request.Evaluator?.Email || 'Unknown',
       assignedAt: request.AssignedAt,
       submittedAt: request.SubmittedAt,
       reevaluatedMarks: request.ReevaluatedMarks,
@@ -661,5 +795,255 @@ export const getAssignedReevaluationsService = async () => {
   } catch (error) {
     console.error('Error in getAssignedReevaluationsService:', error);
     throw new Error(`Failed to retrieve reevaluation assignments: ${error.message}`);
+  }
+};
+
+
+{/*--Evaluator registration and auto generation of uid pass--*/}
+
+/**
+ * Register a new evaluator with auto-generated UID and temporary password
+ * @param {string} name - Evaluator's full name
+ * @param {string} email - Evaluator's email
+ * @param {string} phoneNumber - Evaluator's phone number
+ * @returns {Promise<Object>} Object containing the evaluator details and credentials
+ */
+export const registerEvaluatorService = async (name, email, phoneNumber) => {
+  // Validate input
+  if (!name || !email || !phoneNumber) {
+    const error = new Error("Name, email and phone number are required");
+    error.status = 400;
+    throw error;
+  }
+
+  // Check if email already exists
+  const existingEmailUser = await UserLogin.findOne({ where: { Email: email } });
+  if (existingEmailUser) {
+    const error = new Error("Email is already registered");
+    error.status = 409;
+    throw error;
+  }
+  
+  // Check if phone number already exists
+  const existingPhoneUser = await UserLogin.findOne({ where: { PhoneNumber: phoneNumber } });
+  if (existingPhoneUser) {
+    const error = new Error("Phone number is already registered");
+    error.status = 409;
+    throw error;
+  }
+
+  try {
+    // Generate a new unique UID
+    const uid = await generateNewUID();
+    
+    // Generate a random temporary password (4 characters)
+    const tempPassword = generateRandomPassword(4);
+    
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    // Create the new evaluator record
+    const newEvaluator = await UserLogin.create({
+      Name: name,
+      Email: email,
+      PhoneNumber: phoneNumber,
+      Uid: uid,
+      Pass: hashedPassword,
+      Role: "evaluator",
+      Active: true,
+      FirstLogin: true // Flag to force password change on first login
+    });
+    
+    // Return the user data with the plain text password (for one-time display)
+    return {
+      success: true,
+      uid: newEvaluator.Uid,
+      password: tempPassword, // Plain text password (only for initial display)
+      name: newEvaluator.Name,
+      email: newEvaluator.Email
+    };
+  } catch (error) {
+    console.error("Error registering evaluator:", error);
+    const serviceError = new Error("Failed to register evaluator");
+    serviceError.status = 500;
+    serviceError.originalError = error;
+    throw serviceError;
+  }
+};
+
+/**
+ * Generate a random password of specified length
+ * @param {number} length - Length of the password to generate
+ * @returns {string} Random password
+ */
+const generateRandomPassword = (length) => {
+  const charset = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let password = "";
+  
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * charset.length);
+    password += charset[randomIndex];
+  }
+  
+  return password;
+};
+
+/**
+ * Service to generate a new unique UID by finding the last one and incrementing
+ * @returns {Promise<string>} The new UID
+ */
+const generateNewUID = async () => {
+  try {
+    // SQL Server compatible query
+    const lastRecord = await UserLogin.findOne({
+      order: [['Uid', 'DESC']], // Simple ordering by UID
+      limit: 1,
+    });
+
+    let newUID = "UID001"; // Default UID
+
+    if (lastRecord) {
+      // Extract the last UID and increment it
+      const lastUID = lastRecord.Uid;
+      // Extract numeric part using JavaScript instead of SQL function
+      const uidNumber = parseInt(lastUID.replace(/\D/g, '')); 
+      newUID = `UID${String(uidNumber + 1).padStart(3, "0")}`; // Increment UID and format it
+    }
+
+    return newUID;
+  } catch (error) {
+    console.error("Error generating new UID:", error.message);
+    throw error; // Rethrow the error to be handled by the controller
+  }
+};
+
+
+
+
+//** Get checked Copies */
+
+/**
+ * Get checked (evaluated) copies by packing ID
+ * @param {string} packingId - The packing ID to get checked copies for
+ * @returns {Promise<Object>} Details of checked copies
+ */
+export const getCheckedCopiesService = async (packingId) => {
+  if (!packingId) {
+    const error = new Error("Packing ID is required");
+    error.status = 400;
+    throw error;
+  }
+
+  try {
+    // Step 1: Find all BagIDs for the PackingID
+    const baggingRecords = await Bagging.findAll({
+      where: { PackingID: packingId },
+      attributes: ["BagID"],
+      raw: true,
+    });
+
+    if (!baggingRecords || baggingRecords.length === 0) {
+      const error = new Error("No bags found for the given packing ID");
+      error.status = 404;
+      throw error;
+    }
+
+    const bagIds = baggingRecords.map((record) => record.BagID);
+
+    // Step 2: Find all CopyBarcodes for the BagIDs
+    const gunningRecords = await CopyGunning.findAll({
+      where: { BagID: bagIds, IsScanned: 1 },
+      attributes: ["CopyBarcode", "BagID"],
+      raw: true,
+    });
+
+    if (!gunningRecords || gunningRecords.length === 0) {
+      return {
+        packingId,
+        bagCount: bagIds.length,
+        totalCopies: 0,
+        checkedCopies: [],
+        message: "No copies found for the given bags"
+      };
+    }
+
+    // Get all copy barcodes
+    const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
+    
+    // Find only checked assignments for these copies
+    const checkedAssignments = await CopyAssignments.findAll({
+      where: {
+        CopyBarcode: allCopyBarcodes,
+        IsChecked: true  // Only get checked copies
+      },
+      attributes: ['CopyBarcode', 'EvaluatorID', 'AssignedAt', 'CheckedAt'],
+      raw: true
+    });
+    
+    // Get evaluator information for checked copies
+    const evaluatorIds = checkedAssignments.map(assignment => assignment.EvaluatorID);
+    const uniqueEvaluatorIds = [...new Set(evaluatorIds)];
+    
+    const evaluatorsMap = {};
+    if (uniqueEvaluatorIds.length > 0) {
+      const evaluatorRecords = await UserLogin.findAll({
+        where: { Uid: uniqueEvaluatorIds },
+        attributes: ['Uid', 'Name'],
+        raw: true
+      });
+      
+      evaluatorRecords.forEach(evaluator => {
+        evaluatorsMap[evaluator.Uid] = evaluator.Name;
+      });
+    }
+    
+    // Format the checked copies data
+    const checkedCopies = checkedAssignments.map(assignment => ({
+      copyId: assignment.CopyBarcode,
+      evaluatorId: assignment.EvaluatorID,
+      evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown',
+      assignedAt: assignment.AssignedAt,
+      checkedAt: assignment.CheckedAt
+    }));
+
+    // Group checked copies by bag
+    const bagCheckedMap = {};
+    checkedAssignments.forEach(assignment => {
+      // Find which bag this copy belongs to
+      const gunningRecord = gunningRecords.find(record => 
+        record.CopyBarcode === assignment.CopyBarcode
+      );
+      
+      if (gunningRecord) {
+        const bagId = gunningRecord.BagID;
+        if (!bagCheckedMap[bagId]) {
+          bagCheckedMap[bagId] = {
+            checkedCount: 0,
+            copies: []
+          };
+        }
+        
+        bagCheckedMap[bagId].checkedCount++;
+        bagCheckedMap[bagId].copies.push({
+          copyId: assignment.CopyBarcode,
+          evaluatorId: assignment.EvaluatorID,
+          evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown'
+        });
+      }
+    });
+    
+    // Return just the checked copies data
+    return {
+      // packingId,
+      // bagCount: bagIds.length,
+      // totalCopies: allCopyBarcodes.length,
+      checkedCount: checkedCopies.length,
+      checkedCopies,
+      // bagDetails: bagCheckedMap,
+      // evaluators: evaluatorsMap
+    };
+  } catch (error) {
+    console.error(`Error in getCheckedCopiesService: ${error.message}`);
+    throw error;
   }
 };

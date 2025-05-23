@@ -68,11 +68,20 @@ CopyBatchAssignment.belongsTo(UserLogin, {
   constraints: false
 });
 
-// Add association between CopyAssignments and UserLogin
+// association between CopyAssignments and UserLogin
 CopyAssignments.belongsTo(UserLogin, {
   foreignKey: 'EvaluatorID',
   targetKey: 'Uid',
   constraints: false
 });
+
+// association bw copyreevaluation and subjectdata
+CopyReevaluation.belongsTo(SubjectData, {
+  foreignKey: 'CopyID',
+  targetKey: 'barcode', 
+  as: 'CopyDetails'
+});
+
+
 };
 
