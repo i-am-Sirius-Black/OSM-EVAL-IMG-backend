@@ -188,12 +188,21 @@ export const getEvaluatorsStatus = async (req, res) => {
 
 
 
-/**
- * Get evaluated copies
+
+
+
+
+/**v2
+ * Get evaluated copies with filtering
  */
 export const getEvaluatedCopies = async (req, res) => {
   try {
-    const evaluatedCopies = await EvaluatedCopiesService();
+    // Extract filter parameters from query
+    const { course, subject, session, evaluatorId } = req.query;
+    const filters = { course, subject, session, evaluatorId };
+    
+    // Call service with filters
+    const evaluatedCopies = await EvaluatedCopiesService(filters);
 
     if (!evaluatedCopies || evaluatedCopies.length === 0) {
       return res.status(200).json({
@@ -203,10 +212,27 @@ export const getEvaluatedCopies = async (req, res) => {
       });
     }
 
+    // Get unique filter options for dropdowns
+    const courses = [...new Set(evaluatedCopies.map(copy => copy.course).filter(Boolean))];
+    const subjects = [...new Set(evaluatedCopies.map(copy => copy.subject).filter(Boolean))];
+    const sessions = [...new Set(evaluatedCopies.map(copy => {
+      if (copy.examDate) {
+        // Extract year from examDate
+        const date = new Date(copy.examDate);
+        return date.getFullYear();
+      }
+      return null;
+    }).filter(Boolean))];
+
     res.status(200).json({
       message: "Successfully retrieved evaluated copies",
       count: evaluatedCopies.length,
-      copies: evaluatedCopies
+      copies: evaluatedCopies,
+      filters: {
+        courses,
+        subjects,
+        sessions
+      }
     });
   } catch (error) {
     console.error("Error fetching evaluated copies:", error.message);
@@ -216,6 +242,36 @@ export const getEvaluatedCopies = async (req, res) => {
     });
   }
 }
+
+
+// /**
+//  * Get evaluated copies
+//  */
+// export const getEvaluatedCopies = async (req, res) => {
+//   try {
+//     const evaluatedCopies = await EvaluatedCopiesService();
+
+//     if (!evaluatedCopies || evaluatedCopies.length === 0) {
+//       return res.status(200).json({
+//         message: "No evaluated copies found",
+//         count: 0,
+//         copies: []
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: "Successfully retrieved evaluated copies",
+//       count: evaluatedCopies.length,
+//       copies: evaluatedCopies
+//     });
+//   } catch (error) {
+//     console.error("Error fetching evaluated copies:", error.message);
+//     res.status(500).json({ 
+//       error: "Failed to fetch evaluated copies",
+//       message: error.message
+//     });
+//   }
+// }
 
 
 

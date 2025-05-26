@@ -4,7 +4,8 @@ import { getAllRejectedCopies, getCopiesToEvaluate, getEvaluationStats, getQuest
 
 const router = express.Router();
 
-router.post('/', userProtected, saveEvaluation); //* - Save evaluation record
+// router.post('/', userProtected, saveEvaluation); //* - Save evaluation record
+router.post('/save', saveEvaluation); //* - Save evaluation (eval+annotation)
 router.get('/rejected', userProtected, getAllRejectedCopies); // - Get All rejected copies
 router.post('/reject', userProtected, rejectCopy); // - Reject a copy
 router.post('/unreject', userProtected, unrejectCopy); //  - Unreject a copy

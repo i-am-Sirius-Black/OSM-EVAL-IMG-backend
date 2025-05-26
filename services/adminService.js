@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
 import { sequelize } from "../config/db.js";
 import { Op } from "sequelize";
-
+import { sendEvaluatorCredentials } from './emailService.js';
 
 
 
@@ -286,18 +286,62 @@ export const getEvaluatorsStatusService = async () => {
 
 
 
-/**
- * Get all Evaluated/checked copies
+/** ---v2
+ * Get all Evaluated/checked copies with filtering options
+ * @param {Object} filters - Optional filters (course, subject, session, etc.)
+ * @returns {Promise<Array>} Filtered evaluated copies
  */
-export const EvaluatedCopiesService = async () => {
+export const EvaluatedCopiesService = async (filters = {}) => {
   try {
-    const evaluatedCopies = await CopyEval.findAll({
-      where: { 
-        del: false,
-        status: 'Evaluated' // Ensure we only get evaluated copies
-      },
-      attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time', 'createdat', 'updatedat'],
-    });
+    const { course, subject, session, evaluatorId } = filters;
+    
+    // Build the where clause for CopyEval
+    const whereClause = { 
+      del: false,
+      // Add more conditions if needed
+    };
+    
+    // Add evaluator filter if provided
+    if (evaluatorId) {
+      whereClause.eval_id = evaluatorId;
+    }
+    
+    // Base query with subject data include
+    const queryOptions = {
+      where: whereClause,
+      attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time', 'status', 'createdat', 'updatedat'],
+      include: [{
+        model: SubjectData,
+        as: 'subjectData',
+        required: true,
+        attributes: ['Course', 'Subject', 'SubjectID', 'ExamDate']
+      }]
+    };
+    
+    // Add course, subject, and session filters to the include
+    if (course || subject || session) {
+      const subjectWhere = {};
+      
+      if (course) subjectWhere.Course = course;
+      if (subject) subjectWhere.Subject = subject;
+      // if (session) {
+      //   // Assuming ExamDate can be used to filter by session/year
+      //   subjectWhere.ExamDate = {
+      //     [Op.like]: `${session}%` // This will match dates starting with the session year
+      //   };
+      // }
+      if (session) {
+        // Convert ExamDate to string and check year part
+        subjectWhere.ExamDate = sequelize.where(
+          sequelize.fn('YEAR', sequelize.col('ExamDate')), 
+          session
+        );
+      }
+      
+      queryOptions.include[0].where = subjectWhere;
+    }
+    
+    const evaluatedCopies = await CopyEval.findAll(queryOptions);
 
     // Return proper data structure with all relevant fields
     return evaluatedCopies.map(record => ({
@@ -306,14 +350,52 @@ export const EvaluatedCopiesService = async () => {
       obtainedMarks: record.obt_mark,
       maxMarks: record.max_mark,
       evaluationTime: record.eval_time,
+      status: record.status,
       createdAt: record.createdat,
-      updatedAt: record.updatedat
+      updatedAt: record.updatedat,
+      // Add subject data
+      course: record.subjectData?.Course || 'Unknown',
+      subject: record.subjectData?.Subject || 'Unknown',
+      subjectCode: record.subjectData?.SubjectID || 'Unknown',
+      examDate: record.subjectData?.ExamDate || null
     }));
   } catch (error) {
     console.error("Error in EvaluatedCopiesService:", error);
     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
   }
 };
+
+
+
+// /**
+//  * Get all Evaluated/checked copies
+//  */
+// export const EvaluatedCopiesService = async () => {
+//   try {
+//     const evaluatedCopies = await CopyEval.findAll({
+//       where: { 
+//         del: false,
+//         // status: 'Evaluated' // Ensure we only get evaluated copies
+//       },
+//       attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time','status', 'createdat', 'updatedat'],
+//     });
+
+//     // Return proper data structure with all relevant fields
+//     return evaluatedCopies.map(record => ({
+//       copyId: record.copyid,
+//       evaluatorId: record.eval_id,
+//       obtainedMarks: record.obt_mark,
+//       maxMarks: record.max_mark,
+//       evaluationTime: record.eval_time,
+//       status: record.status,
+//       createdAt: record.createdat,
+//       updatedAt: record.updatedat
+//     }));
+//   } catch (error) {
+//     console.error("Error in EvaluatedCopiesService:", error);
+//     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
+//   }
+// };
 
 
 
@@ -501,11 +583,15 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
     }
 
     // Check if evaluator has any active batches for this subject
+    // Modified to also check expiration time
     const activeBatch = await CopyBatchAssignment.findOne({
       where: {
         EvaluatorID: evaluatorId,
         SubjectCode: subjectCode,
-        IsActive: true
+        IsActive: true,
+        ExpiresAt: {
+          [Op.gt]: new Date() // Not expired yet
+        }
       }
     });
 
@@ -514,6 +600,22 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
       error.status = 400;
       throw error;
     }
+
+    // Force cleanup of any expired batches before unassigning
+    // This handles cases where the batch is expired but still marked as active
+    await CopyBatchAssignment.update(
+      { IsActive: false },
+      {
+        where: {
+          EvaluatorID: evaluatorId,
+          SubjectCode: subjectCode,
+          IsActive: true,
+          ExpiresAt: {
+            [Op.lte]: new Date() // Already expired
+          }
+        }
+      }
+    );
 
     // Update the assignment to set Active = false
     const updatedCount = await SubjectAssignment.update(
@@ -790,7 +892,8 @@ export const getAssignedReevaluationsService = async () => {
       assignedAt: request.AssignedAt,
       submittedAt: request.SubmittedAt,
       reevaluatedMarks: request.ReevaluatedMarks,
-      remarks: request.Remarks
+      remarks: request.Remarks,
+      isChecked: request.IsChecked
     }));
   } catch (error) {
     console.error('Error in getAssignedReevaluationsService:', error);
@@ -801,13 +904,82 @@ export const getAssignedReevaluationsService = async () => {
 
 {/*--Evaluator registration and auto generation of uid pass--*/}
 
-/**
- * Register a new evaluator with auto-generated UID and temporary password
- * @param {string} name - Evaluator's full name
- * @param {string} email - Evaluator's email
- * @param {string} phoneNumber - Evaluator's phone number
- * @returns {Promise<Object>} Object containing the evaluator details and credentials
- */
+// /**
+//  * Register a new evaluator with auto-generated UID and temporary password
+//  * @param {string} name - Evaluator's full name
+//  * @param {string} email - Evaluator's email
+//  * @param {string} phoneNumber - Evaluator's phone number
+//  * @returns {Promise<Object>} Object containing the evaluator details and credentials
+//  */
+// export const registerEvaluatorService = async (name, email, phoneNumber) => {
+//   // Validate input
+//   if (!name || !email || !phoneNumber) {
+//     const error = new Error("Name, email and phone number are required");
+//     error.status = 400;
+//     throw error;
+//   }
+
+//   // Check if email already exists
+//   const existingEmailUser = await UserLogin.findOne({ where: { Email: email } });
+//   if (existingEmailUser) {
+//     const error = new Error("Email is already registered");
+//     error.status = 409;
+//     throw error;
+//   }
+  
+//   // Check if phone number already exists
+//   const existingPhoneUser = await UserLogin.findOne({ where: { PhoneNumber: phoneNumber } });
+//   if (existingPhoneUser) {
+//     const error = new Error("Phone number is already registered");
+//     error.status = 409;
+//     throw error;
+//   }
+
+//   try {
+//     // Generate a new unique UID
+//     const uid = await generateNewUID();
+    
+//     // Generate a random temporary password (4 characters)
+//     const tempPassword = generateRandomPassword(4);
+    
+//     // Hash the password
+//     const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+//     // Create the new evaluator record
+//     const newEvaluator = await UserLogin.create({
+//       Name: name,
+//       Email: email,
+//       PhoneNumber: phoneNumber,
+//       Uid: uid,
+//       Pass: hashedPassword,
+//       Role: "evaluator",
+//       Active: true,
+//       FirstLogin: true // Flag to force password change on first login
+//     });
+    
+//     // Return the user data with the plain text password (for one-time display)
+//     return {
+//       success: true,
+//       uid: newEvaluator.Uid,
+//       password: tempPassword, // Plain text password (only for initial display)
+//       name: newEvaluator.Name,
+//       email: newEvaluator.Email
+//     };
+//   } catch (error) {
+//     console.error("Error registering evaluator:", error);
+//     const serviceError = new Error("Failed to register evaluator");
+//     serviceError.status = 500;
+//     serviceError.originalError = error;
+//     throw serviceError;
+//   }
+// };
+
+
+
+
+
+
+// Update your existing function
 export const registerEvaluatorService = async (name, email, phoneNumber) => {
   // Validate input
   if (!name || !email || !phoneNumber) {
@@ -836,8 +1008,8 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     // Generate a new unique UID
     const uid = await generateNewUID();
     
-    // Generate a random temporary password (4 characters)
-    const tempPassword = generateRandomPassword(4);
+    // Generate a random temporary password (6 characters for better security)
+    const tempPassword = generateRandomPassword(6);
     
     // Hash the password
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
@@ -854,14 +1026,35 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
       FirstLogin: true // Flag to force password change on first login
     });
     
+    // Send credentials via email
+    try {
+      await sendEvaluatorCredentials(name, email, uid, tempPassword);
+      console.log(`Credentials sent to ${email} successfully`);
+    } catch (emailError) {
+      console.error("Failed to send credentials email:", emailError);
+      // We don't throw here to avoid rolling back the user creation
+      // Just log the error and continue
+    }
+    
     // Return the user data with the plain text password (for one-time display)
     return {
       success: true,
       uid: newEvaluator.Uid,
       password: tempPassword, // Plain text password (only for initial display)
       name: newEvaluator.Name,
-      email: newEvaluator.Email
+      email: newEvaluator.Email,
+      emailSent: true
     };
+
+    // //?testing
+    //     return {
+    //   success: true,
+    //   uid: uid,
+    //   password: tempPassword, // Plain text password (only for initial display)
+    //   name: name,
+    //   email: email,
+    //   emailSent: true
+    // };
   } catch (error) {
     console.error("Error registering evaluator:", error);
     const serviceError = new Error("Failed to register evaluator");
@@ -871,22 +1064,59 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
   }
 };
 
+
+
+// /**
+//  * Generate a random password of specified length
+//  * @param {number} length - Length of the password to generate
+//  * @returns {string} Random password
+//  */
+// const generateRandomPassword = (length) => {
+//   const charset = "abcdefghijklmnopqrstuvwxyz0123456789";
+//   let password = "";
+  
+//   for (let i = 0; i < length; i++) {
+//     const randomIndex = Math.floor(Math.random() * charset.length);
+//     password += charset[randomIndex];
+//   }
+  
+//   return password;
+// };
+
+
+
 /**
- * Generate a random password of specified length
- * @param {number} length - Length of the password to generate
- * @returns {string} Random password
+ * Generate a more secure random password with mixed character types
+ * @param {number} length - Length of the password to generate (minimum 8 recommended)
+ * @returns {string} Secure random password
  */
 const generateRandomPassword = (length) => {
-  const charset = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let password = "";
+  // Ensure minimum length of 8 for security
+  const passwordLength = Math.max(length, 8);
   
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * charset.length);
-    password += charset[randomIndex];
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const numbers = "0123456789";
+  const specialChars = "!@#$%^&*()-_=+";
+  
+  // Ensure at least one character from each set
+  let password = "";
+  password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+  password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+  password += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  password += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
+  
+  // Fill the rest with random characters from all sets
+  const allChars = lowercase + uppercase + numbers + specialChars;
+  for (let i = password.length; i < passwordLength; i++) {
+    const randomIndex = Math.floor(Math.random() * allChars.length);
+    password += allChars[randomIndex];
   }
   
-  return password;
+  // Shuffle the password to avoid predictable pattern (4 specific chars at beginning)
+  return password.split('').sort(() => Math.random() - 0.5).join('');
 };
+
 
 /**
  * Service to generate a new unique UID by finding the last one and incrementing
@@ -920,6 +1150,8 @@ const generateNewUID = async () => {
 
 
 
+
+
 //** Get checked Copies */
 
 /**
@@ -927,6 +1159,9 @@ const generateNewUID = async () => {
  * @param {string} packingId - The packing ID to get checked copies for
  * @returns {Promise<Object>} Details of checked copies
  */
+
+
+//?v2
 export const getCheckedCopiesService = async (packingId) => {
   if (!packingId) {
     const error = new Error("Packing ID is required");
@@ -949,7 +1184,8 @@ export const getCheckedCopiesService = async (packingId) => {
     }
 
     const bagIds = baggingRecords.map((record) => record.BagID);
-
+    console.log("bagids", bagIds);
+    
     // Step 2: Find all CopyBarcodes for the BagIDs
     const gunningRecords = await CopyGunning.findAll({
       where: { BagID: bagIds, IsScanned: 1 },
@@ -957,11 +1193,14 @@ export const getCheckedCopiesService = async (packingId) => {
       raw: true,
     });
 
+    console.log("Gunning records found:", gunningRecords.length);
+    if (gunningRecords.length > 0) {
+      console.log("Sample gunning record:", gunningRecords[0]);
+    }
+    
     if (!gunningRecords || gunningRecords.length === 0) {
       return {
-        packingId,
-        bagCount: bagIds.length,
-        totalCopies: 0,
+        checkedCount: 0,
         checkedCopies: [],
         message: "No copies found for the given bags"
       };
@@ -969,8 +1208,9 @@ export const getCheckedCopiesService = async (packingId) => {
 
     // Get all copy barcodes
     const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
+    console.log("All copy barcodes:", allCopyBarcodes);
     
-    // Find only checked assignments for these copies
+    // Find checked copies from CopyAssignments first
     const checkedAssignments = await CopyAssignments.findAll({
       where: {
         CopyBarcode: allCopyBarcodes,
@@ -980,8 +1220,66 @@ export const getCheckedCopiesService = async (packingId) => {
       raw: true
     });
     
-    // Get evaluator information for checked copies
-    const evaluatorIds = checkedAssignments.map(assignment => assignment.EvaluatorID);
+    console.log("Checked assignments found:", checkedAssignments.length);
+    
+    // ALSO check CopyEval table for evaluated copies, since that's the definitive source
+    const evaluatedCopies = await CopyEval.findAll({
+      where: {
+        copyid: allCopyBarcodes,
+        del: false,
+        status: {
+          [Op.in]: ['Evaluated', 'Reevaluated'] // Include both statuses
+        }
+      },
+      attributes: ['copyid', 'eval_id', 'createdat', 'updatedat', 'status', 'obt_mark', 'max_mark'],
+      raw: true
+    });
+    
+    console.log("Evaluated copies found in CopyEval:", evaluatedCopies.length);
+    if (evaluatedCopies.length > 0) {
+      console.log("Sample evaluated copy:", evaluatedCopies[0]);
+    }
+    
+    // Combine unique copies from both sources
+    const uniqueCopyIds = new Set();
+    let allCheckedCopies = [];
+    
+    // Process assignment records first
+    if (checkedAssignments.length > 0) {
+      checkedAssignments.forEach(assignment => {
+        if (!uniqueCopyIds.has(assignment.CopyBarcode)) {
+          uniqueCopyIds.add(assignment.CopyBarcode);
+          allCheckedCopies.push({
+            copyId: assignment.CopyBarcode,
+            evaluatorId: assignment.EvaluatorID,
+            source: 'assignment',
+            assignedAt: assignment.AssignedAt,
+            checkedAt: assignment.CheckedAt
+          });
+        }
+      });
+    }
+    
+    // Then add evaluated copies that aren't already included
+    if (evaluatedCopies.length > 0) {
+      evaluatedCopies.forEach(evalCopy => {
+        if (!uniqueCopyIds.has(evalCopy.copyid)) {
+          uniqueCopyIds.add(evalCopy.copyid);
+          allCheckedCopies.push({
+            copyId: evalCopy.copyid,
+            evaluatorId: evalCopy.eval_id,
+            source: 'copyeval',
+            evaluatedAt: evalCopy.updatedat,
+            status: evalCopy.status,
+            obtainedMarks: evalCopy.obt_mark,
+            maxMarks: evalCopy.max_mark
+          });
+        }
+      });
+    }
+    
+    // Get evaluator information for all evaluator IDs
+    const evaluatorIds = allCheckedCopies.map(copy => copy.evaluatorId);
     const uniqueEvaluatorIds = [...new Set(evaluatorIds)];
     
     const evaluatorsMap = {};
@@ -997,53 +1295,152 @@ export const getCheckedCopiesService = async (packingId) => {
       });
     }
     
-    // Format the checked copies data
-    const checkedCopies = checkedAssignments.map(assignment => ({
-      copyId: assignment.CopyBarcode,
-      evaluatorId: assignment.EvaluatorID,
-      evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown',
-      assignedAt: assignment.AssignedAt,
-      checkedAt: assignment.CheckedAt
+    // Add evaluator names to the checked copies
+    allCheckedCopies = allCheckedCopies.map(copy => ({
+      ...copy,
+      evaluatorName: evaluatorsMap[copy.evaluatorId] || 'Unknown'
     }));
-
-    // Group checked copies by bag
-    const bagCheckedMap = {};
-    checkedAssignments.forEach(assignment => {
-      // Find which bag this copy belongs to
-      const gunningRecord = gunningRecords.find(record => 
-        record.CopyBarcode === assignment.CopyBarcode
-      );
-      
-      if (gunningRecord) {
-        const bagId = gunningRecord.BagID;
-        if (!bagCheckedMap[bagId]) {
-          bagCheckedMap[bagId] = {
-            checkedCount: 0,
-            copies: []
-          };
-        }
-        
-        bagCheckedMap[bagId].checkedCount++;
-        bagCheckedMap[bagId].copies.push({
-          copyId: assignment.CopyBarcode,
-          evaluatorId: assignment.EvaluatorID,
-          evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown'
-        });
-      }
-    });
     
     // Return just the checked copies data
     return {
-      // packingId,
-      // bagCount: bagIds.length,
-      // totalCopies: allCopyBarcodes.length,
-      checkedCount: checkedCopies.length,
-      checkedCopies,
-      // bagDetails: bagCheckedMap,
-      // evaluators: evaluatorsMap
+      checkedCount: allCheckedCopies.length,
+      checkedCopies: allCheckedCopies
     };
   } catch (error) {
     console.error(`Error in getCheckedCopiesService: ${error.message}`);
     throw error;
   }
 };
+
+
+
+// export const getCheckedCopiesService = async (packingId) => {
+//   if (!packingId) {
+//     const error = new Error("Packing ID is required");
+//     error.status = 400;
+//     throw error;
+//   }
+
+//   try {
+//     // Step 1: Find all BagIDs for the PackingID
+//     const baggingRecords = await Bagging.findAll({
+//       where: { PackingID: packingId },
+//       attributes: ["BagID"],
+//       raw: true,
+//     });
+
+
+
+//     if (!baggingRecords || baggingRecords.length === 0) {
+//       const error = new Error("No bags found for the given packing ID");
+//       error.status = 404;
+//       throw error;
+//     }
+
+//     const bagIds = baggingRecords.map((record) => record.BagID);
+//     console.log("bagids", bagIds);
+    
+
+//     // Step 2: Find all CopyBarcodes for the BagIDs
+//     const gunningRecords = await CopyGunning.findAll({
+//       where: { BagID: bagIds, IsScanned: 1 },
+//       attributes: ["CopyBarcode", "BagID"],
+//       raw: true,
+//     });
+
+//      console.log("Gunning records found:", gunningRecords.length);
+//     if (gunningRecords.length > 0) {
+//       console.log("Sample gunning record:", gunningRecords[0]);
+//     }
+    
+
+//     if (!gunningRecords || gunningRecords.length === 0) {
+//       return {
+//         packingId,
+//         bagCount: bagIds.length,
+//         totalCopies: 0,
+//         checkedCopies: [],
+//         message: "No copies found for the given bags"
+//       };
+//     }
+
+//     // Get all copy barcodes
+//     const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
+    
+//     // Find only checked assignments for these copies
+//     const checkedAssignments = await CopyAssignments.findAll({
+//       where: {
+//         CopyBarcode: allCopyBarcodes,
+//         IsChecked: true  // Only get checked copies
+//       },
+//       attributes: ['CopyBarcode', 'EvaluatorID', 'AssignedAt', 'CheckedAt'],
+//       raw: true
+//     });
+    
+//     // Get evaluator information for checked copies
+//     const evaluatorIds = checkedAssignments.map(assignment => assignment.EvaluatorID);
+//     const uniqueEvaluatorIds = [...new Set(evaluatorIds)];
+    
+//     const evaluatorsMap = {};
+//     if (uniqueEvaluatorIds.length > 0) {
+//       const evaluatorRecords = await UserLogin.findAll({
+//         where: { Uid: uniqueEvaluatorIds },
+//         attributes: ['Uid', 'Name'],
+//         raw: true
+//       });
+      
+//       evaluatorRecords.forEach(evaluator => {
+//         evaluatorsMap[evaluator.Uid] = evaluator.Name;
+//       });
+//     }
+    
+//     // Format the checked copies data
+//     const checkedCopies = checkedAssignments.map(assignment => ({
+//       copyId: assignment.CopyBarcode,
+//       evaluatorId: assignment.EvaluatorID,
+//       evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown',
+//       assignedAt: assignment.AssignedAt,
+//       checkedAt: assignment.CheckedAt
+//     }));
+
+//     // Group checked copies by bag
+//     const bagCheckedMap = {};
+//     checkedAssignments.forEach(assignment => {
+//       // Find which bag this copy belongs to
+//       const gunningRecord = gunningRecords.find(record => 
+//         record.CopyBarcode === assignment.CopyBarcode
+//       );
+      
+//       if (gunningRecord) {
+//         const bagId = gunningRecord.BagID;
+//         if (!bagCheckedMap[bagId]) {
+//           bagCheckedMap[bagId] = {
+//             checkedCount: 0,
+//             copies: []
+//           };
+//         }
+        
+//         bagCheckedMap[bagId].checkedCount++;
+//         bagCheckedMap[bagId].copies.push({
+//           copyId: assignment.CopyBarcode,
+//           evaluatorId: assignment.EvaluatorID,
+//           evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown'
+//         });
+//       }
+//     });
+    
+//     // Return just the checked copies data
+//     return {
+//       // packingId,
+//       // bagCount: bagIds.length,
+//       // totalCopies: allCopyBarcodes.length,
+//       checkedCount: checkedCopies.length,
+//       checkedCopies,
+//       // bagDetails: bagCheckedMap,
+//       // evaluators: evaluatorsMap
+//     };
+//   } catch (error) {
+//     console.error(`Error in getCheckedCopiesService: ${error.message}`);
+//     throw error;
+//   }
+// };

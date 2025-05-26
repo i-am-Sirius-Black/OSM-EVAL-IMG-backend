@@ -1,4 +1,4 @@
-import { DataTypes } from 'sequelize';
+import { DataTypes } from "sequelize";
 
 const defineCopyAnnotation = (sequelize) => {
   const CopyAnnotation = sequelize.define(
@@ -18,17 +18,25 @@ const defineCopyAnnotation = (sequelize) => {
         type: DataTypes.TEXT, // Use TEXT for JSON data
         allowNull: true, // Allow null if no annotations are provided
       },
+      annotations2: {
+        type: DataTypes.TEXT, // Use TEXT for JSON data
+        allowNull: true, // Allow null if no annotations are provided
+      },
       draw_annotations: {
+        type: DataTypes.TEXT, // Use TEXT for JSON data
+        allowNull: true, // Allow null if no drawing annotations are provided
+      },
+      draw_annotations2: {
         type: DataTypes.TEXT, // Use TEXT for JSON data
         allowNull: true, // Allow null if no drawing annotations are provided
       },
     },
     {
       tableName: "copy_annotations", // Specify the table name
-      timestamps: false, // disable automatic timestamps   
+      timestamps: false, // disable automatic timestamps
     }
   );
-  
+
   return CopyAnnotation;
 };
 

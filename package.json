@@ -20,6 +20,7 @@
     "fs-extra": "^11.3.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.0.5",
+    "nodemailer": "^7.0.3",
     "pdfkit": "^0.17.0",
     "sequelize": "^6.37.7",
     "sharp": "^0.34.1",

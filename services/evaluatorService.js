@@ -771,7 +771,8 @@ export const getEvaluatorReevaluationsService = async (evaluatorId) => {
     const requests = await CopyReevaluation.findAll({
       where: {
         AssignedEvaluatorID: evaluatorId,
-        Status: 'Assigned' // Only get active assignments
+        Status: 'Assigned', // Only get active assignments
+        isChecked: false
       },
       include: [
         {

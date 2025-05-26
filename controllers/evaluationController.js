@@ -1,47 +1,71 @@
-import { 
-    saveEvaluationRecord, 
+import {  
     getRejectedCopies, 
     rejectCopyRecord, 
     unrejectCopyRecord,
     getQuestionsService,
     getCopiesToEvaluateService,
     getEvaluationStatsService,
+    saveEvaluationAndAnnotations,
   } from '../services/evaluationService.js';
   
-  /**
-   * Save evaluation data
-   */
-  export const saveEvaluation = async (req, res) => {
-    try {
-      const evaluationData = {
-        copyid: req.body.copyid,
-        obt_mark: req.body.obt_mark,
-        max_mark: req.body.max_mark,
-        status: req.body.status,
-        eval_time: req.body.eval_time,
-        eval_id: req.body.eval_id,
-        reject_reason: req.body.reject_reason,
-        bag_id: req.body.bag_id || 'test',
-      };
-  
-      console.log("Received request to save evaluation record:", evaluationData);
-  
-      const newEval = await saveEvaluationRecord(evaluationData);
-  
-      res.status(201).json({
-        success: true,
-        message: "Evaluation record saved successfully",
-        data: newEval,
-      });
-    } catch (error) {
-      console.error("Error saving evaluation record:", error.message);
-      
-      const statusCode = error.status || 500;
-      res.status(statusCode).json({ 
-        error: error.message || "Failed to save evaluation record" 
-      });
-    }
+  // /**updated v2
+  //  * Save evaluation data (eval+annotations included)
+  //  */
+export const saveEvaluation = async (req, res) => {
+  try {
+    // Handles both normal and re-evaluation based on payload
+    const result = await saveEvaluationAndAnnotations(req.body);
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      data: result.data,
+    });
+  } catch (error) {
+    console.error("Error saving evaluation:", error.message);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to save evaluation"
+    });
   }
+};
+
+
+
+
+  // /**
+  //  * Save evaluation data
+  //  */
+  // export const saveEvaluation = async (req, res) => {
+  //   try {
+  //     const evaluationData = {
+  //       copyid: req.body.copyid,
+  //       obt_mark: req.body.obt_mark,
+  //       max_mark: req.body.max_mark,
+  //       status: req.body.status,
+  //       eval_time: req.body.eval_time,
+  //       eval_id: req.body.eval_id,
+  //       reject_reason: req.body.reject_reason,
+  //       bag_id: req.body.bag_id || 'test',
+  //     };
+  
+  //     console.log("Received request to save evaluation record:", evaluationData);
+  
+  //     const newEval = await saveEvaluationRecord(evaluationData);
+  
+  //     res.status(201).json({
+  //       success: true,
+  //       message: "Evaluation record saved successfully",
+  //       data: newEval,
+  //     });
+  //   } catch (error) {
+  //     console.error("Error saving evaluation record:", error.message);
+      
+  //     const statusCode = error.status || 500;
+  //     res.status(statusCode).json({ 
+  //       error: error.message || "Failed to save evaluation record" 
+  //     });
+  //   }
+  // }
   
   /**
    * Get all rejected copies

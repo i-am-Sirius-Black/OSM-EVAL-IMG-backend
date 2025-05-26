@@ -9,3 +9,15 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
 // You can export other configuration values as needed
 export const TOKEN_EXPIRY = '3d';
 export const COOKIE_MAX_AGE = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
+
+
+
+
+// Add this to your existing config.js file
+export const EMAIL_CONFIG = {
+  HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  PORT: parseInt(process.env.EMAIL_PORT || '587', 10),
+  SECURE: process.env.EMAIL_SECURE === 'true',
+  USER: process.env.EMAIL_USER || 'your-email@gmail.com',
+  PASSWORD: process.env.EMAIL_PASSWORD || 'your-app-password',
+};

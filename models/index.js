@@ -83,5 +83,21 @@ CopyReevaluation.belongsTo(SubjectData, {
 });
 
 
+
+// Association: CopyEval belongs to SubjectData
+CopyEval.belongsTo(SubjectData, {
+  foreignKey: 'copyid',
+  targetKey: 'barcode',
+  as: 'subjectData'
+});
+
+// Association: SubjectData hasOne CopyEval
+SubjectData.hasOne(CopyEval, {
+  foreignKey: 'copyid',
+  sourceKey: 'barcode',
+  as: 'copyEval'
+});
+
+
 };
 

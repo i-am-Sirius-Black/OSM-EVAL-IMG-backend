@@ -1,12 +1,14 @@
 import { sequelize } from '../config/db.js';
-import { CopyAssignments, CopyEval, EvaluationAutosave, Questions } from '../models/index.js';
+import { CopyAnnotation, CopyAssignments, CopyEval, EvaluationAutosave, Questions } from '../models/index.js';
 
-/**
- * Save an evaluation record
- * @param {Object} evaluationData - The evaluation data to save
- * @returns {Object} The saved evaluation record
+
+
+/**updatedv2
+ * Save an evaluation data (eval + annotation)
+ * @param {Object} data - The evaluation data to save
+ * @returns {Object} The saved evaluation data
  */
-export const saveEvaluationRecord = async (evaluationData) => {
+export const saveEvaluationAndAnnotations = async (data) => {
   const {
     copyid,
     obt_mark,
@@ -14,75 +16,143 @@ export const saveEvaluationRecord = async (evaluationData) => {
     status,
     eval_time,
     eval_id,
-    reject_reason='',
     bag_id,
-  } = evaluationData;
+    annotations,
+    drawAnnotations,
+  } = data;
 
-  // Start a transaction to ensure data consistency
   const transaction = await sequelize.transaction();
-
   try {
-    // Validate required fields
-    if (!copyid || !bag_id) {
-      const error = new Error("Copy ID and Bag ID are required");
-      error.status = 400;
-      throw error;
+    // Save or update CopyEval
+    let evalRecord = await CopyEval.findOne({ where: { copyid }, transaction });
+    if (evalRecord) {
+      await evalRecord.update({
+        obt_mark,
+        max_mark,
+        status,
+        eval_time,
+        eval_id,
+        bag_id,
+      }, { transaction });
+    } else {
+      evalRecord = await CopyEval.create({
+        copyid,
+        obt_mark,
+        max_mark,
+        status,
+        eval_time,
+        eval_id,
+        bag_id,
+      }, { transaction });
     }
 
-    // Create the evaluation record
-    const newEval = await CopyEval.create({
-      copyid,
-      obt_mark,
-      max_mark,
-      status: status || "Not-Evaluated", // Default if not provided
-      eval_time,
-      eval_id,
-      reject_reason,
-      bag_id,
-    }, { transaction });
-
-    // If this is a completed evaluation (status is "Evaluated"), update the assignment record
-    if (status === "Evaluated") {
-      // Find and update the assignment record
-      const assignment = await CopyAssignments.findOne({
-        where: {
-          CopyBarcode: copyid,
-          EvaluatorID: eval_id
-        },
-        transaction
-      });
-
-      // If the assignment exists, mark it as checked
-      if (assignment) {
-        await assignment.update({
-          IsChecked: true,
-          CheckedAt: new Date()
-        }, { transaction });
-        
-        // Optionally, also remove any autosave data for this copy since it's now fully evaluated
-        await EvaluationAutosave.destroy({
-          where: {
-            CopyID: copyid,
-            EvaluatorID: eval_id
-          },
-          transaction
-        });
-      } else {
-        console.warn(`No assignment record found for copy ${copyid} and evaluator ${eval_id}`);
-      }
+    // Save or update CopyAnnotation
+    let annotationRecord = await CopyAnnotation.findOne({ where: { copy_id: copyid }, transaction });
+    if (annotationRecord) {
+      await annotationRecord.update({
+        annotations: JSON.stringify(annotations || []),
+        draw_annotations: JSON.stringify(drawAnnotations || []),
+      }, { transaction });
+    } else {
+      await CopyAnnotation.create({
+        copy_id: copyid,
+        annotations: JSON.stringify(annotations || []),
+        draw_annotations: JSON.stringify(drawAnnotations || []),
+      }, { transaction });
     }
 
-    // Commit the transaction
     await transaction.commit();
-
-    return newEval;
+    return { message: "Evaluation and annotations saved", data: evalRecord };
   } catch (error) {
-    // Roll back the transaction on error
     await transaction.rollback();
-    console.error("Error in saveEvaluationRecord:", error);
     throw error;
   }
 };
+
+
+
+// /**
+//  * Save an evaluation record
+//  * @param {Object} evaluationData - The evaluation data to save
+//  * @returns {Object} The saved evaluation record
+//  */
+// export const saveEvaluationRecord = async (evaluationData) => {
+//   const {
+//     copyid,
+//     obt_mark,
+//     max_mark,
+//     status,
+//     eval_time,
+//     eval_id,
+//     reject_reason='',
+//     bag_id,
+//   } = evaluationData;
+
+//   // Start a transaction to ensure data consistency
+//   const transaction = await sequelize.transaction();
+
+//   try {
+//     // Validate required fields
+//     if (!copyid || !bag_id) {
+//       const error = new Error("Copy ID and Bag ID are required");
+//       error.status = 400;
+//       throw error;
+//     }
+
+//     // Create the evaluation record
+//     const newEval = await CopyEval.create({
+//       copyid,
+//       obt_mark,
+//       max_mark,
+//       status: status || "Not-Evaluated", // Default if not provided
+//       eval_time,
+//       eval_id,
+//       reject_reason,
+//       bag_id,
+//     }, { transaction });
+
+//     // If this is a completed evaluation (status is "Evaluated"), update the assignment record
+//     if (status === "Evaluated") {
+//       // Find and update the assignment record
+//       const assignment = await CopyAssignments.findOne({
+//         where: {
+//           CopyBarcode: copyid,
+//           EvaluatorID: eval_id
+//         },
+//         transaction
+//       });
+
+//       // If the assignment exists, mark it as checked
+//       if (assignment) {
+//         await assignment.update({
+//           IsChecked: true,
+//           CheckedAt: new Date()
+//         }, { transaction });
+        
+//         // Optionally, also remove any autosave data for this copy since it's now fully evaluated
+//         await EvaluationAutosave.destroy({
+//           where: {
+//             CopyID: copyid,
+//             EvaluatorID: eval_id
+//           },
+//           transaction
+//         });
+//       } else {
+//         console.warn(`No assignment record found for copy ${copyid} and evaluator ${eval_id}`);
+//       }
+//     }
+
+//     // Commit the transaction
+//     await transaction.commit();
+
+//     return newEval;
+//   } catch (error) {
+//     // Roll back the transaction on error
+//     await transaction.rollback();
+//     console.error("Error in saveEvaluationRecord:", error);
+//     throw error;
+//   }
+// };
 
 /**
  * Get all rejected copies

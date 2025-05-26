@@ -1,4 +1,4 @@
-import { DataTypes } from 'sequelize';
+import { DataTypes } from "sequelize";
 
 const defineCopyEval = (sequelize) => {
   const CopyEval = sequelize.define(
@@ -17,6 +17,10 @@ const defineCopyEval = (sequelize) => {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true,
       },
+      obt_mark2: {
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: true,
+      },
       max_mark: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true,
@@ -30,7 +34,15 @@ const defineCopyEval = (sequelize) => {
         type: DataTypes.STRING(50),
         allowNull: true,
       },
+      eval_time2: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+      },
       eval_id: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
+      eval_id2: {
         type: DataTypes.STRING(20),
         allowNull: true,
       },
@@ -63,7 +75,7 @@ const defineCopyEval = (sequelize) => {
       timestamps: false,
     }
   );
-  
+
   return CopyEval;
 };
 

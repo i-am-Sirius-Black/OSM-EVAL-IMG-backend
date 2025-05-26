@@ -10,7 +10,7 @@ import { initializeDatabases } from './config/db.js';
 
 // Import routes
 import { setupAssociations } from './models/index.js';
-import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evalAutosaveRoutes, evaluationRoutes, evaluatorRoutes, examRoutes,  } from './routes/index.js';
+import { adminRoutes, annotationRoutes, authRoutes, copyRoutes, documentRoutes, evalAutosaveRoutes, evaluationRoutes, evaluatorRoutes, examRoutes, reevalRoutes,  } from './routes/index.js';
 import scheduleResetExpiredBatches from './utils/sheduleResetExpiredBatches.js';
 
 // Initialize environment variables
@@ -44,6 +44,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/autosave', evalAutosaveRoutes);
 app.use('/api/evaluator', evaluatorRoutes);
+app.use('/api/reeval', reevalRoutes);
 
 
 
