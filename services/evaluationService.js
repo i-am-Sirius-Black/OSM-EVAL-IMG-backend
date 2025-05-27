@@ -1,12 +1,16 @@
-import { sequelize } from '../config/db.js';
-import { CopyAnnotation, CopyAssignments, CopyEval, EvaluationAutosave, Questions } from '../models/index.js';
+import { sequelize } from "../config/db.js";
+import {
+  CopyAnnotation,
+  CopyAssignments,
+  CopyEval,
+  EvaluationAutosave,
+  Questions,
+} from "../models/index.js";
 
-
-
-/**updatedv2
- * Save an evaluation data (eval + annotation)
+/**
+ * Save an evaluation data (eval + annotation) only if it doesn't already exist
  * @param {Object} data - The evaluation data to save
- * @returns {Object} The saved evaluation data
+ * @returns {Object} Result of the operation with success status and message
  */
 export const saveEvaluationAndAnnotations = async (data) => {
   const {
@@ -23,19 +27,21 @@ export const saveEvaluationAndAnnotations = async (data) => {
 
   const transaction = await sequelize.transaction();
   try {
-    // Save or update CopyEval
+    // Check if CopyEval record already exists
     let evalRecord = await CopyEval.findOne({ where: { copyid }, transaction });
     if (evalRecord) {
-      await evalRecord.update({
-        obt_mark,
-        max_mark,
-        status,
-        eval_time,
-        eval_id,
-        bag_id,
-      }, { transaction });
-    } else {
-      evalRecord = await CopyEval.create({
+      // Record already exists, don't update it
+      await transaction.rollback();
+      return {
+        success: false,
+        message: "Evaluation already exists for this copy",
+        data: evalRecord,
+      };
+    }
+
+    // Create new CopyEval record (only if it doesn't exist)
+    evalRecord = await CopyEval.create(
+      {
         copyid,
         obt_mark,
         max_mark,
@@ -43,40 +49,85 @@ export const saveEvaluationAndAnnotations = async (data) => {
         eval_time,
         eval_id,
         bag_id,
-      }, { transaction });
+      },
+      { transaction }
+    );
+
+    // Check if CopyAnnotation record already exists
+    let annotationRecord = await CopyAnnotation.findOne({
+      where: { copy_id: copyid },
+      transaction,
+    });
+
+    if (annotationRecord) {
+      // Annotation already exists, don't update it
+      await transaction.rollback();
+      return {
+        success: false,
+        message: "Annotations already exist for this copy",
+        data: null,
+      };
     }
 
-    // Save or update CopyAnnotation
-    let annotationRecord = await CopyAnnotation.findOne({ where: { copy_id: copyid }, transaction });
-    if (annotationRecord) {
-      await annotationRecord.update({
-        annotations: JSON.stringify(annotations || []),
-        draw_annotations: JSON.stringify(drawAnnotations || []),
-      }, { transaction });
-    } else {
-      await CopyAnnotation.create({
+    // Create new CopyAnnotation record (only if it doesn't exist)
+    await CopyAnnotation.create(
+      {
         copy_id: copyid,
         annotations: JSON.stringify(annotations || []),
         draw_annotations: JSON.stringify(drawAnnotations || []),
-      }, { transaction });
+      },
+      { transaction }
+    );
+
+    // Update the assignment record to mark it as checked
+    const assignment = await CopyAssignments.findOne({
+      where: {
+        CopyBarcode: copyid,
+        EvaluatorID: eval_id,
+      },
+      transaction,
+    });
+
+    if (assignment) {
+      await assignment.update(
+        {
+          IsChecked: true,
+          CheckedAt: new Date(),
+        },
+        { transaction }
+      );
     }
 
+    // Update SubjectData to mark the copy as checked
+    await SubjectData.update(
+      {
+        IsChecked: true,
+      },
+      {
+        where: { barcode: copyid },
+        transaction,
+      }
+    );
+
     await transaction.commit();
-    return { message: "Evaluation and annotations saved", data: evalRecord };
+    return {
+      success: true,
+      message: "Evaluation and annotations saved successfully",
+      data: evalRecord,
+    };
   } catch (error) {
     await transaction.rollback();
-    throw error;
+    console.error("Error in saveEvaluationAndAnnotations:", error);
+    throw new Error(`Failed to save evaluation: ${error.message}`);
   }
 };
 
-
-
-// /**
-//  * Save an evaluation record
-//  * @param {Object} evaluationData - The evaluation data to save
-//  * @returns {Object} The saved evaluation record
+// /**updatedv2
+//  * Save an evaluation data (eval + annotation)
+//  * @param {Object} data - The evaluation data to save
+//  * @returns {Object} The saved evaluation data
 //  */
-// export const saveEvaluationRecord = async (evaluationData) => {
+// export const saveEvaluationAndAnnotations = async (data) => {
 //   const {
 //     copyid,
 //     obt_mark,
@@ -84,72 +135,55 @@ export const saveEvaluationAndAnnotations = async (data) => {
 //     status,
 //     eval_time,
 //     eval_id,
-//     reject_reason='',
 //     bag_id,
-//   } = evaluationData;
+//     annotations,
+//     drawAnnotations,
+//   } = data;
 
-//   // Start a transaction to ensure data consistency
 //   const transaction = await sequelize.transaction();
-
 //   try {
-//     // Validate required fields
-//     if (!copyid || !bag_id) {
-//       const error = new Error("Copy ID and Bag ID are required");
-//       error.status = 400;
-//       throw error;
+//     // Save or update CopyEval
+//     let evalRecord = await CopyEval.findOne({ where: { copyid }, transaction });
+//     if (evalRecord) {
+//       await evalRecord.update({
+//         obt_mark,
+//         max_mark,
+//         status,
+//         eval_time,
+//         eval_id,
+//         bag_id,
+//       }, { transaction });
+//     } else {
+//       evalRecord = await CopyEval.create({
+//         copyid,
+//         obt_mark,
+//         max_mark,
+//         status,
+//         eval_time,
+//         eval_id,
+//         bag_id,
+//       }, { transaction });
 //     }
 
-//     // Create the evaluation record
-//     const newEval = await CopyEval.create({
-//       copyid,
-//       obt_mark,
-//       max_mark,
-//       status: status || "Not-Evaluated", // Default if not provided
-//       eval_time,
-//       eval_id,
-//       reject_reason,
-//       bag_id,
-//     }, { transaction });
-
-//     // If this is a completed evaluation (status is "Evaluated"), update the assignment record
-//     if (status === "Evaluated") {
-//       // Find and update the assignment record
-//       const assignment = await CopyAssignments.findOne({
-//         where: {
-//           CopyBarcode: copyid,
-//           EvaluatorID: eval_id
-//         },
-//         transaction
-//       });
-
-//       // If the assignment exists, mark it as checked
-//       if (assignment) {
-//         await assignment.update({
-//           IsChecked: true,
-//           CheckedAt: new Date()
-//         }, { transaction });
-        
-//         // Optionally, also remove any autosave data for this copy since it's now fully evaluated
-//         await EvaluationAutosave.destroy({
-//           where: {
-//             CopyID: copyid,
-//             EvaluatorID: eval_id
-//           },
-//           transaction
-//         });
-//       } else {
-//         console.warn(`No assignment record found for copy ${copyid} and evaluator ${eval_id}`);
-//       }
+//     // Save or update CopyAnnotation
+//     let annotationRecord = await CopyAnnotation.findOne({ where: { copy_id: copyid }, transaction });
+//     if (annotationRecord) {
+//       await annotationRecord.update({
+//         annotations: JSON.stringify(annotations || []),
+//         draw_annotations: JSON.stringify(drawAnnotations || []),
+//       }, { transaction });
+//     } else {
+//       await CopyAnnotation.create({
+//         copy_id: copyid,
+//         annotations: JSON.stringify(annotations || []),
+//         draw_annotations: JSON.stringify(drawAnnotations || []),
+//       }, { transaction });
 //     }
 
-//     // Commit the transaction
 //     await transaction.commit();
-
-//     return newEval;
+//     return { message: "Evaluation and annotations saved", data: evalRecord };
 //   } catch (error) {
-//     // Roll back the transaction on error
 //     await transaction.rollback();
-//     console.error("Error in saveEvaluationRecord:", error);
 //     throw error;
 //   }
 // };
@@ -178,7 +212,9 @@ export const rejectCopyRecord = async (rejectData) => {
 
   // Validate required fields
   if (!copyId || !reason || !userId || !bagId) {
-    const error = new Error("Copy ID, reason, user ID, and Bag ID are required");
+    const error = new Error(
+      "Copy ID, reason, user ID, and Bag ID are required"
+    );
     error.status = 400;
     throw error;
   }
@@ -229,13 +265,14 @@ export const unrejectCopyRecord = async (copyId) => {
   }
 
   // Update the record to mark it as not deleted (0)
-  await existingRecord.update(
-    { status: "Not-Evaluated", reject_reason: '', del: 0 }
-  );
+  await existingRecord.update({
+    status: "Not-Evaluated",
+    reject_reason: "",
+    del: 0,
+  });
 
   return true;
 };
-
 
 /**
  * Get all questions for a specific paper
@@ -254,31 +291,25 @@ export const getQuestionsService = async (paperId) => {
     // Fetch questions for the specified paper ID
     const questions = await Questions.findAll({
       where: { PaperID: paperId },
-      attributes: [
-        'Sno',
-        'PaperID',
-        'QNo',
-        'MaxMark'
-      ],
-      order: [['QNo', 'ASC']], // Order by question number
-      raw: true
+      attributes: ["Sno", "PaperID", "QNo", "MaxMark"],
+      order: [["QNo", "ASC"]], // Order by question number
+      raw: true,
     });
 
     // Transform data to match frontend expectations if needed
-    const formattedQuestions = questions.map(q => ({
+    const formattedQuestions = questions.map((q) => ({
       sno: q.Sno,
       paperId: q.PaperID,
       qNo: q.QNo,
-      maxMark: parseFloat(q.MaxMark) // Convert to number from decimal
+      maxMark: parseFloat(q.MaxMark), // Convert to number from decimal
     }));
 
     return formattedQuestions;
   } catch (error) {
-    console.error('Error fetching questions:', error);
+    console.error("Error fetching questions:", error);
     throw error;
   }
 };
-
 
 /**
  * Get copies assigned to an evaluator
@@ -292,12 +323,11 @@ export const getCopiesToEvaluateService = async (evaluatorId) => {
       where: {
         EvaluatorID: evaluatorId,
         // Only return copies that haven't been fully evaluated yet
-        IsChecked: false
+        IsChecked: false,
       },
-      attributes: ['CopyBarcode', 'AssignedAt'],
-      raw: true
+      attributes: ["CopyBarcode", "AssignedAt"],
+      raw: true,
     });
-
 
     // // Format the response to include both copyId and assignedAt
     // const copies = assignments.map(assignment => ({
@@ -305,37 +335,38 @@ export const getCopiesToEvaluateService = async (evaluatorId) => {
     //   assignedAt: assignment.AssignedAt
     // }));
 
-
-        // Check for any partial copies in EvaluationAutosave table
+    // Check for any partial copies in EvaluationAutosave table
     const partialCopies = await EvaluationAutosave.findAll({
       where: {
-        EvaluatorID: evaluatorId
+        EvaluatorID: evaluatorId,
       },
-      attributes: ['CopyID'], // Make sure this matches your actual column name
-      raw: true
+      attributes: ["CopyID"], // Make sure this matches your actual column name
+      raw: true,
     });
 
     // Create a Set of partial copy IDs for faster lookup
-    const partialCopyIdsSet = new Set(partialCopies.map(copy => copy.CopyID));
+    const partialCopyIdsSet = new Set(partialCopies.map((copy) => copy.CopyID));
 
     // Format the response to include copyId, assignedAt, and partial flag
-    const copies = assignments.map(assignment => ({
+    const copies = assignments.map((assignment) => ({
       copyId: assignment.CopyBarcode,
       assignedAt: assignment.AssignedAt,
-      partial: partialCopyIdsSet.has(assignment.CopyBarcode) // true if copy exists in autosave, false otherwise
+      partial: partialCopyIdsSet.has(assignment.CopyBarcode), // true if copy exists in autosave, false otherwise
     }));
-    
+
     // Log results for debugging
-    console.log(`Found ${copies.length} copies assigned to evaluator ${evaluatorId}`);
+    console.log(
+      `Found ${copies.length} copies assigned to evaluator ${evaluatorId}`
+    );
     console.log("Assignment data:", { evaluatorId });
     return copies;
   } catch (error) {
     console.error(`Error in getCopiesToEvaluateService: ${error.message}`);
-    throw new Error(`Failed to retrieve copies for evaluator: ${error.message}`);
+    throw new Error(
+      `Failed to retrieve copies for evaluator: ${error.message}`
+    );
   }
-}
-
-
+};
 
 /**
  * Get evaluation statistics for an evaluator
@@ -348,47 +379,49 @@ export const getEvaluationStatsService = async (evaluatorId) => {
     const evaluatedCount = await CopyAssignments.count({
       where: {
         EvaluatorID: evaluatorId,
-       IsChecked: true // Only count copies that have been evaluated
-      }
+        IsChecked: true, // Only count copies that have been evaluated
+      },
     });
-    
+
     // Get pending count
     const pendingCount = await CopyAssignments.count({
       where: {
         EvaluatorID: evaluatorId,
-        IsChecked: false
-      }
+        IsChecked: false,
+      },
     });
 
     //Get partially evaluated count
     const partialCount = await EvaluationAutosave.count({
       where: {
-        EvaluatorID: evaluatorId
-      }
+        EvaluatorID: evaluatorId,
+      },
     });
-    
+
     // Get total assigned count
     const totalAssigned = await CopyAssignments.count({
       where: {
-        EvaluatorID: evaluatorId
-      }
+        EvaluatorID: evaluatorId,
+      },
     });
-    
+
     console.log(`Evaluation stats for evaluator ${evaluatorId}:`, {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      partial: partialCount 
+      partial: partialCount,
     });
-    
+
     return {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      partial: partialCount
+      partial: partialCount,
     };
   } catch (error) {
     console.error(`Error in getEvaluationStatsService: ${error.message}`);
-    throw new Error(`Failed to retrieve evaluation stats for evaluator: ${error.message}`);
+    throw new Error(
+      `Failed to retrieve evaluation stats for evaluator: ${error.message}`
+    );
   }
-}
+};

@@ -100,6 +100,132 @@ export const getEvaluatorsService = async () => {
   }
 };
 
+
+
+
+/**
+ * Activate an evaluator account
+ * @param {string} uid - The UID of the evaluator to activate
+ * @returns {Promise<Object>} Result of the operation
+ */
+export const activateEvaluatorService = async (uid) => {
+  try {
+    // Find the evaluator
+    const evaluator = await UserLogin.findOne({
+      where: { 
+        Uid: uid,
+        Role: 'evaluator'
+      }
+    });
+    
+    if (!evaluator) {
+      const error = new Error(`Evaluator with ID ${uid} not found`);
+      error.status = 404;
+      throw error;
+    }
+    
+    // Check if already active
+    if (evaluator.Active) {
+      return {
+        success: true,
+        message: "Evaluator is already active",
+        evaluator: {
+          uid: evaluator.Uid,
+          name: evaluator.Name,
+          email: evaluator.Email,
+          phoneNumber: evaluator.PhoneNumber,
+          active: evaluator.Active
+        }
+      };
+    }
+    
+    // Update evaluator status
+    evaluator.Active = true;
+    await evaluator.save();
+    
+    console.log(`Evaluator ${uid} activated successfully`);
+    
+    return {
+      success: true,
+      message: "Evaluator activated successfully",
+      evaluator: {
+        uid: evaluator.Uid,
+        name: evaluator.Name,
+        email: evaluator.Email,
+        phoneNumber: evaluator.PhoneNumber,
+        active: evaluator.Active
+      }
+    };
+  } catch (error) {
+    console.error(`Error in activateEvaluatorService: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Deactivate an evaluator account
+ * @param {string} uid - The UID of the evaluator to deactivate
+ * @returns {Promise<Object>} Result of the operation
+ */
+export const deactivateEvaluatorService = async (uid) => {
+  try {
+    // Find the evaluator
+    const evaluator = await UserLogin.findOne({
+      where: { 
+        Uid: uid,
+        Role: 'evaluator'
+      }
+    });
+    
+    if (!evaluator) {
+      const error = new Error(`Evaluator with ID ${uid} not found`);
+      error.status = 404;
+      throw error;
+    }
+    
+    // Check if already inactive
+    if (!evaluator.Active) {
+      return {
+        success: true,
+        message: "Evaluator is already inactive",
+        evaluator: {
+          uid: evaluator.Uid,
+          name: evaluator.Name,
+          email: evaluator.Email,
+          phoneNumber: evaluator.PhoneNumber,
+          active: evaluator.Active
+        }
+      };
+    }
+    
+    // Update evaluator status
+    evaluator.Active = false;
+    await evaluator.save();
+    
+    console.log(`Evaluator ${uid} deactivated successfully`);
+    
+    return {
+      success: true,
+      message: "Evaluator deactivated successfully",
+      evaluator: {
+        uid: evaluator.Uid,
+        name: evaluator.Name,
+        email: evaluator.Email,
+        phoneNumber: evaluator.PhoneNumber,
+        active: evaluator.Active
+      }
+    };
+  } catch (error) {
+    console.error(`Error in deactivateEvaluatorService: ${error.message}`);
+    throw error;
+  }
+};
+
+
+
+
+
+
 /**
  * Assign copies to an evaluator
  *
@@ -396,6 +522,12 @@ export const EvaluatedCopiesService = async (filters = {}) => {
 //     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
 //   }
 // };
+
+
+
+
+
+
 
 
 

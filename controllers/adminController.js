@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
+import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -114,6 +114,95 @@ export const getEvaluators = async (req, res) => {
       });
     }
   };
+
+
+/**
+ * Activate an evaluator account
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const activateEvaluator = async (req, res) => {
+  const { uid } = req.body;
+  
+  // Validate request
+  if (!uid) {
+    return res.status(400).json({
+      success: false,
+      error: "Evaluator UID is required"
+    });
+  }
+  
+  try {
+    // Ensure request is from admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "Not authorized to activate evaluators"
+      });
+    }
+    
+    const result = await activateEvaluatorService(uid);
+    
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      evaluator: result.evaluator
+    });
+  } catch (error) {
+    console.error("Error activating evaluator:", error);
+    
+    return res.status(error.status || 500).json({
+      success: false,
+      message: "Failed to activate evaluator",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Deactivate an evaluator account
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const deactivateEvaluator = async (req, res) => {
+  const { uid } = req.body;
+  
+  // Validate request
+  if (!uid) {
+    return res.status(400).json({
+      success: false,
+      error: "Evaluator UID is required"
+    });
+  }
+  
+  try {
+    // Ensure request is from admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "Not authorized to deactivate evaluators"
+      });
+    }
+    
+    const result = await deactivateEvaluatorService(uid);
+    
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      evaluator: result.evaluator
+    });
+  } catch (error) {
+    console.error("Error deactivating evaluator:", error);
+    
+    return res.status(error.status || 500).json({
+      success: false,
+      message: "Failed to deactivate evaluator",
+      error: error.message
+    });
+  }
+};
+
+
 
 
 

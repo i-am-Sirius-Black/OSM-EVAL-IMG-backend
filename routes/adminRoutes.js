@@ -1,5 +1,5 @@
 import express from 'express';
-import { adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, getAssignedReevaluations, getCheckedCopies, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments, registerEvaluator, unassignSubject } from '../controllers/adminController.js';
+import { activateEvaluator, adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, deactivateEvaluator, getAssignedReevaluations, getCheckedCopies, getEvaluatedCopies, getEvaluators, getEvaluatorsStatus, getSubjectAssignments, registerEvaluator, unassignSubject } from '../controllers/adminController.js';
 import { adminProtected } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -9,6 +9,9 @@ router.get('/check', checkAdminAuth);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
 router.get('/evaluators', adminProtected, getEvaluators);
+router.post('/evaluators/activate', adminProtected, activateEvaluator);
+router.post('/evaluators/deactivate', adminProtected, deactivateEvaluator);
+
 router.post('/evaluator/assign-copies', adminProtected, assignCopies);
 router.get('/get-evaluators-status', adminProtected, getEvaluatorsStatus);
 router.get('/get-evaluated-copies', adminProtected, getEvaluatedCopies); //- Get all evaluated copies

@@ -1,12 +1,16 @@
 import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
+import { DB_CONFIG } from './config.js';
 
 dotenv.config();
 
+const {HOST, DIALECT, DB1, DB2,PASSWORD, USER} = DB_CONFIG;
+
+
 // Testing Database Connection
-export const sequelize = new Sequelize("Testing", "ttspl", "admin", {
-  host: "localhost",
-  dialect: "mssql",
+export const sequelize = new Sequelize(DB2, USER, PASSWORD, {
+  host: HOST,
+  dialect: DIALECT,
   dialectOptions: {
     options: {
       encrypt: false,
@@ -26,9 +30,9 @@ export const sequelize = new Sequelize("Testing", "ttspl", "admin", {
 });
 
 // TTSPL_EVAL Database Connection
-export const evalSequelize = new Sequelize("TTSPL_EVAL", "ttspl", "admin", {
-  host: "localhost",
-  dialect: "mssql",
+export const evalSequelize = new Sequelize(DB1, USER, PASSWORD, {
+  host: HOST,
+  dialect: DIALECT,
   dialectOptions: {
     options: {
       encrypt: false,

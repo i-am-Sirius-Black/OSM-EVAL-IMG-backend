@@ -46,6 +46,10 @@ const defineSubjectData = (sequelize) => {
     IsAssigned: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
+    },
+    IsChecked:{
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   }, {
     tableName: "tbl_subjectdata",
