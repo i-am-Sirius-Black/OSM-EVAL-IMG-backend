@@ -2,15 +2,15 @@ import { DataTypes } from 'sequelize';
 
 const defineCopyPage = (sequelize) => {
   const CopyPage = sequelize.define(
-    "CopyPage",
+    "tbl_copy_pages",
     {
       id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
       },
-      copy_id: {
-        type: DataTypes.STRING(50), // Changed from INTEGER to STRING for consistency
+      copyid: {
+        type: DataTypes.STRING(50),
         allowNull: false,
       },
       page_number: {
@@ -18,7 +18,7 @@ const defineCopyPage = (sequelize) => {
         allowNull: false,
       },
       image_data: {
-        type: DataTypes.BLOB("long"), // VARBINARY(MAX) maps to BLOB in Sequelize
+        type: DataTypes.BLOB("long"),
         allowNull: false,
       },
     },

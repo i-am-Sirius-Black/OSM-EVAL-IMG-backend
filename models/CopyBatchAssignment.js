@@ -2,36 +2,37 @@ import { DataTypes, Sequelize } from 'sequelize';
 
 const defineCopyBatchAssignment = (sequelize) => {
   const CopyBatchAssignment = sequelize.define("tbl_copy_batch_assignments", {
-    BatchID: {
+    batch_id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    EvaluatorID: {
+    evaluator_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    SubjectCode: {
+    subject_code: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    ExamName: {
+    exam_name: {
       type: DataTypes.STRING(100),
       allowNull: false,
     },
-    AssignedAt: {
+    assigned_at: {
       type: DataTypes.DATE,
       defaultValue: Sequelize.NOW,
+      allowNull: false,
     },
-    ExpiresAt: {
+    expires_at: {
       type: DataTypes.DATE,
       allowNull: false,
     },
-    IsActive: {
+    is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
-    CompletedAt: {
+    completed_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },

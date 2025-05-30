@@ -2,22 +2,22 @@ import { DataTypes } from 'sequelize';
 
 const defineQuestions = (sequelize) => {
   const Questions = sequelize.define(
-    "Questions",
+    "tbl_questions",
     {
-      Sno: {
+      sno: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
       },
-      PaperID: {
+      paper_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
-      QNo: {
+      q_no: {
         type: DataTypes.STRING(10),
         allowNull: false,
       },
-      MaxMark: {
+      max_mark: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: false,
       },

@@ -9,7 +9,7 @@ const defineCopyAnnotation = (sequelize) => {
         primaryKey: true,
         autoIncrement: true, // Auto-incrementing primary key
       },
-      copy_id: {
+      copyid: {
         type: DataTypes.STRING(50),
         allowNull: false, // Copy ID cannot be null
         unique: true, // Copy ID must be unique

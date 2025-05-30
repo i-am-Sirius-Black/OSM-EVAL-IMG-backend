@@ -6,9 +6,9 @@ import fs from 'fs-extra';
 import { 
   getCopyPageImage, 
   generatePdfWithAnnotations,
-  searchCopiesByBagId,
-  getAnnotatedCopies,
-  getAllCopiesByPackingId
+  // searchCopiesByBagId,
+  // getAnnotatedCopies,
+  // getAllCopiesByPackingId
 } from '../services/copyService.js';
 import { fileURLToPath } from 'url';
 
@@ -106,75 +106,75 @@ export const copyPdfDownload = async (req, res) => {
 }
 
 
-/**
- * Search and filter copies
- */
-export const copySearch = async (req, res) => {
-  try {
-    const { bagId, searchTerm, sortOrder } = req.query;
+// /**
+//  * Search and filter copies
+//  */
+// export const copySearch = async (req, res) => {
+//   try {
+//     const { bagId, searchTerm, sortOrder } = req.query;
 
-    if (!bagId) {
-      return res.status(400).json({ error: "Bag ID is required" });
-    }
+//     if (!bagId) {
+//       return res.status(400).json({ error: "Bag ID is required" });
+//     }
 
-    const copyList = await searchCopiesByBagId(bagId, searchTerm, sortOrder);
+//     const copyList = await searchCopiesByBagId(bagId, searchTerm, sortOrder);
 
-    res.status(200).json(copyList);
-  } catch (error) {
-    console.error("Error searching copies:", error.message);
-    res.status(500).json({ error: "Failed to search copies" });
-  }
-}
+//     res.status(200).json(copyList);
+//   } catch (error) {
+//     console.error("Error searching copies:", error.message);
+//     res.status(500).json({ error: "Failed to search copies" });
+//   }
+// }
 
-/**
- * Get annotated copies
- */
-export const copyAnnotated = async (req, res) => {
-  try {
-    const annotatedCopies = await getAnnotatedCopies();
+// /**
+//  * Get annotated copies
+//  */
+// export const copyAnnotated = async (req, res) => {
+//   try {
+//     const annotatedCopies = await getAnnotatedCopies();
 
-    if (!annotatedCopies || annotatedCopies.length === 0) {
-      return res.status(404).json({ 
-        message: "No annotated copies found",
-        copies: [] 
-      });
-    }
+//     if (!annotatedCopies || annotatedCopies.length === 0) {
+//       return res.status(404).json({ 
+//         message: "No annotated copies found",
+//         copies: [] 
+//       });
+//     }
 
-    res.status(200).json({
-      count: annotatedCopies.length,
-      copies: annotatedCopies
-    });
-  } catch (error) {
-    console.error("Error fetching annotated copies:", error.message);
-    res.status(500).json({ error: "Failed to fetch annotated copies" });
-  }
-}
-
-
+//     res.status(200).json({
+//       count: annotatedCopies.length,
+//       copies: annotatedCopies
+//     });
+//   } catch (error) {
+//     console.error("Error fetching annotated copies:", error.message);
+//     res.status(500).json({ error: "Failed to fetch annotated copies" });
+//   }
+// }
 
 
 
 
-//get all copies of a Packing
-export const getAllCopiesByPacking = async (req, res) => {
-  try {
-    const { packingId } = req.query;
-    console.log("Received request for /api/copies/by-packing/:id with packingId:", packingId);
+
+
+// //get all copies of a Packing
+// export const getAllCopiesByPacking = async (req, res) => {
+//   try {
+//     const { packingId } = req.query;
+//     console.log("Received request for /api/copies/by-packing/:id with packingId:", packingId);
   
-    const copyList = await getAllCopiesByPackingId(packingId);
+//     const copyList = await getAllCopiesByPackingId(packingId);
 
-    // Return the list of copies
-    res.status(200).json(copyList);
-  } catch (error) {
-    console.error("Error fetching copies by packing ID:", error.message);
+//     // Return the list of copies
+//     res.status(200).json(copyList);
+//   } catch (error) {
+//     console.error("Error fetching copies by packing ID:", error.message);
     
-    // Use the error status from the service if available
-    const statusCode = error.status || 500;
-    res.status(statusCode).json({ 
-      error: error.message || "Failed to fetch copies by packing ID" 
-    });
-  }
-}
+//     // Use the error status from the service if available
+//     const statusCode = error.status || 500;
+//     res.status(statusCode).json({ 
+//       error: error.message || "Failed to fetch copies by packing ID" 
+//     });
+//   }
+// }
 
 
 

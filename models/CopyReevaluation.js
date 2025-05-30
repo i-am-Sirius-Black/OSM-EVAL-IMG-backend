@@ -4,43 +4,43 @@ const defineReevaluationRequest = (sequelize) => {
   const CopyReevaluation = sequelize.define(
     "tbl_reevaluation_requests",
     {
-      RequestID: {
+      request_id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
       },
-      CopyID: {
+      copyid: {
         type: DataTypes.STRING(50),
         allowNull: false,
       },
-      Reason: {
+      reason: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
-      Status: {
+      status: {
         type: DataTypes.STRING(20),
         allowNull: true,
       },
-      AssignedEvaluatorID: {
+      assigned_evaluator_id: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      ReevaluatedMarks: {
+      reevaluated_marks: {
         type: DataTypes.FLOAT,
         allowNull: true,
       },
-      Remarks: {
+      remarks: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
-      IsChecked: {
+      is_checked: {
         type: DataTypes.BOOLEAN,
       },
-      SubmittedAt: {
+      submitted_at: {
         type: DataTypes.DATE,
         allowNull: true,
       },
-      AssignedAt: {
+      assigned_at: {
         type: DataTypes.DATE,
         defaultValue: Sequelize.NOW,
       },

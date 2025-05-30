@@ -14,12 +14,9 @@ import {
  */
 export const getAssignedSubjects = async (req, res) => {
   try {
-    
-    const evaluatorId = req.params.evaluatorId || req.user.uid;
-    console.log("evaluatorId from check assigned sub", evaluatorId);
-    
+    const evaluatorId = req.user.uid;
     const subjects = await getEvaluatorSubjectsService(evaluatorId);
-    
+
     return res.status(200).json({
       message: "Successfully retrieved assigned subjects",
       subjects,

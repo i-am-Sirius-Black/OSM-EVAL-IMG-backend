@@ -1,20 +1,16 @@
-import { sequelize, evalSequelize } from '../config/db.js';
-import defineBagging from './Bagging.js';
-import defineCenterPackingSlip from './CenterPackingSlip.js';
+import { sequelize } from '../config/db.js';
 import defineCopyAnnotation from './CopyAnnotation.js';
 import defineCopyEval from './CopyEval.js';
-import defineCopyGunning from './CopyGunning.js';
-import defineCopyPage from './copyPage.js';
+import defineCopyPage from './CopyPage.js';
 import defineScanning from './Scanning.js';
 import defineUserLogin from './UserLogin.js';
 import defineQuestions from './Questions.js';
 import defineCopyAssignments from './CopyAssignments.js';
-import defineEvaluationAutosave from './EvalAutosave.js';
 import defineCopyBatchAssignment from './CopyBatchAssignment.js';
 import defineSubjectAssignment from './SubjectAssignments.js';
 import defineSubjectData from './SubjectData.js';
-import defineVwSubjectData from './VwSubjectData.js';
 import defineReevaluationRequest from './CopyReevaluation.js';
+import defineCopy from './Copy.js';
 
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
@@ -23,81 +19,119 @@ export const CopyPage = defineCopyPage(sequelize);
 export const CopyAssignments = defineCopyAssignments(sequelize);
 export const CopyAnnotation = defineCopyAnnotation(sequelize);
 export const Questions = defineQuestions(sequelize);
-export const EvaluationAutosave = defineEvaluationAutosave(sequelize);
 export const CopyBatchAssignment = defineCopyBatchAssignment(sequelize);
 export const SubjectAssignment = defineSubjectAssignment(sequelize);
-export const SubjectData = defineSubjectData(sequelize);
+export const SubjectData =  defineSubjectData(sequelize);
 export const CopyReevaluation = defineReevaluationRequest(sequelize);
-
-export const Bagging = defineBagging(evalSequelize);
-export const CopyGunning = defineCopyGunning(evalSequelize);
-export const Scanning = defineScanning(evalSequelize);
-export const CenterPackingSlip = defineCenterPackingSlip(evalSequelize);
+export const Copy = defineCopy(sequelize);
+export const Scanning = defineScanning(sequelize);
 
 
 
-//* Define associations
 export const setupAssociations = () => {
-  // Example: Bagging has many CopyGunning records
-  Bagging.hasMany(CopyGunning, { foreignKey: "BagID", sourceKey: "BagID" });
-  CopyGunning.belongsTo(Bagging, { foreignKey: "BagID", targetKey: "BagID" });
-
-  SubjectAssignment.hasMany(CopyBatchAssignment, {
-  foreignKey: 'SubjectCode',
-  sourceKey: 'SubjectCode',
-  constraints: false
-});
-
-CopyBatchAssignment.belongsTo(SubjectAssignment, {
-  foreignKey: 'SubjectCode',
-  targetKey: 'SubjectCode',
-  constraints: false
-});
-
-// New association: SubjectAssignment belongs to UserLogin
-  SubjectAssignment.belongsTo(UserLogin, {
-    foreignKey: 'EvaluatorID', // The column in tbl_subject_assignments
-    targetKey: 'Uid', // The column in UserLogin
-    constraints: false // Set to true if you have a foreign key constraint in the database
+  // tbl_copies <-> tbl_subjectdata (Many copies belong to one subjectdata)
+  Copy.belongsTo(SubjectData, {
+    foreignKey: 'subjectdata_id',
+    targetKey: 'subjectdata_id',
+    as: 'subjectData'
+  });
+  
+  SubjectData.hasMany(Copy, {
+    foreignKey: 'subjectdata_id',
+    sourceKey: 'subjectdata_id',
+    as: 'copies'
   });
 
-  // Add association between CopyBatchAssignment and UserLogin
-CopyBatchAssignment.belongsTo(UserLogin, {
-  foreignKey: 'EvaluatorID',
-  targetKey: 'Uid',
-  constraints: false
-});
+  // tbl_copy_pages <-> tbl_copies (Many pages belong to one copy)
+  CopyPage.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasMany(CopyPage, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'pages'
+  });
 
-// association between CopyAssignments and UserLogin
-CopyAssignments.belongsTo(UserLogin, {
-  foreignKey: 'EvaluatorID',
-  targetKey: 'Uid',
-  constraints: false
-});
+  // copy_eval <-> tbl_copies (One eval per copy)
+  CopyEval.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasOne(CopyEval, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'eval'
+  });
 
-// association bw copyreevaluation and subjectdata
-CopyReevaluation.belongsTo(SubjectData, {
-  foreignKey: 'CopyID',
-  targetKey: 'barcode', 
-  as: 'CopyDetails'
-});
+  // tbl_copy_assignments <-> tbl_copies (Many assignments per copy)
+  CopyAssignments.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasMany(CopyAssignments, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'assignments'
+  });
 
+  // tbl_scanning <-> tbl_copies (Many scans per copy)
+  Scanning.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasMany(Scanning, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'scans'
+  });
 
+  // tbl_reevaluation_requests <-> tbl_copies (Many reevaluations per copy)
+  CopyReevaluation.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasMany(CopyReevaluation, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'reevaluations'
+  });
 
-// Association: CopyEval belongs to SubjectData
-CopyEval.belongsTo(SubjectData, {
-  foreignKey: 'copyid',
-  targetKey: 'barcode',
-  as: 'subjectData'
-});
+  // copy_annotations <-> tbl_copies (Many annotations per copy)
+  CopyAnnotation.belongsTo(Copy, {
+    foreignKey: 'copyid',
+    targetKey: 'copyid',
+    as: 'copy'
+  });
+  Copy.hasMany(CopyAnnotation, {
+    foreignKey: 'copyid',
+    sourceKey: 'copyid',
+    as: 'annotations'
+  });
 
-// Association: SubjectData hasOne CopyEval
-SubjectData.hasOne(CopyEval, {
-  foreignKey: 'copyid',
-  sourceKey: 'barcode',
-  as: 'copyEval'
-});
+    SubjectAssignment.belongsTo(UserLogin, {
+    foreignKey: 'evaluator_id',
+    targetKey: 'uid',
+    as: 'evaluator'
+  });
+  UserLogin.hasMany(SubjectAssignment, {
+    foreignKey: 'evaluator_id',
+    sourceKey: 'uid',
+    as: 'subjectAssignments'
+  });
 
+  // If you want to link tbl_copies to tbl_bag (bag_id)
+  // Copy.belongsTo(Bag, {
+  //   foreignKey: 'bag_id',
+  //   targetKey: 'bagid',
+  //   as: 'bag'
+  // });
 
+  // Add other associations as needed (e.g., assignments to evaluators, batches, etc.)
 };
 

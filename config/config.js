@@ -16,6 +16,7 @@ export const DB_CONFIG = {
   HOST: process.env.DB_HOST,
   USER: process.env.DB_USER,
   PASSWORD: process.env.DB_PASSWORD,
+  DB_MAIN: process.env.DB_NAME_MAIN,
   DB1: process.env.DB_NAME,
   DB2: process.env.DB_NAME2,
   DIALECT: process.env.DB_DIALECT,

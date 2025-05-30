@@ -4,7 +4,15 @@ import { getAnnotations, saveAnnotations } from '../controllers/annotationContro
 
 const router = express.Router();
 
-router.get('/:copyId', userProtected, getAnnotations);
-router.post('/', userProtected, saveAnnotations);
+router.use(userProtected) //auth middleware
+
+
+//** Tested and working Apis */
+
+//** ........End .............**/
+
+
+router.get('/:copyId', getAnnotations);
+router.post('/',  saveAnnotations);
 
 export default router;

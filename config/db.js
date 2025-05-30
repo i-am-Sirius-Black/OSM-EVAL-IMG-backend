@@ -4,11 +4,10 @@ import { DB_CONFIG } from './config.js';
 
 dotenv.config();
 
-const {HOST, DIALECT, DB1, DB2,PASSWORD, USER} = DB_CONFIG;
+const { HOST, DIALECT, DB_MAIN, PASSWORD, USER } = DB_CONFIG;
 
-
-// Testing Database Connection
-export const sequelize = new Sequelize(DB2, USER, PASSWORD, {
+// Main Database Connection
+export const sequelize = new Sequelize(DB_MAIN, USER, PASSWORD, {
   host: HOST,
   dialect: DIALECT,
   dialectOptions: {
@@ -17,27 +16,8 @@ export const sequelize = new Sequelize(DB2, USER, PASSWORD, {
       trustServerCertificate: true,
     },
   },
-    define: {
+  define: {
     synOnAssociation: false,
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
-  },
-  logging: false,
-});
-
-// TTSPL_EVAL Database Connection
-export const evalSequelize = new Sequelize(DB1, USER, PASSWORD, {
-  host: HOST,
-  dialect: DIALECT,
-  dialectOptions: {
-    options: {
-      encrypt: false,
-      trustServerCertificate: true,
-    },
   },
   pool: {
     max: 10,
@@ -51,23 +31,17 @@ export const evalSequelize = new Sequelize(DB1, USER, PASSWORD, {
 // Database initialization function
 export const initializeDatabases = async () => {
   try {
-    // Test connections
+    // Test connection
     await sequelize.authenticate();
-    console.log("Testing database connection established");
-    
-    await evalSequelize.authenticate();
-    console.log("TTSPL_EVAL database connection established");
-    
+    console.log("Database connection established");
+
     // Sync models
     await sequelize.sync({ force: false });
-    console.log("Testing database synced");
-    
-    await evalSequelize.sync({ force: false });
-    console.log("TTSPL_EVAL database synced");
-    
+    console.log("Database synced");
+
     return true;
   } catch (error) {
-    console.error("Error connecting to databases:", error.message);
+    console.error("Error connecting to database:", error.message);
     return false;
   }
 };

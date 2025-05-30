@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
+import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAllocationStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -333,42 +333,6 @@ export const getEvaluatedCopies = async (req, res) => {
 }
 
 
-// /**
-//  * Get evaluated copies
-//  */
-// export const getEvaluatedCopies = async (req, res) => {
-//   try {
-//     const evaluatedCopies = await EvaluatedCopiesService();
-
-//     if (!evaluatedCopies || evaluatedCopies.length === 0) {
-//       return res.status(200).json({
-//         message: "No evaluated copies found",
-//         count: 0,
-//         copies: []
-//       });
-//     }
-
-//     res.status(200).json({
-//       message: "Successfully retrieved evaluated copies",
-//       count: evaluatedCopies.length,
-//       copies: evaluatedCopies
-//     });
-//   } catch (error) {
-//     console.error("Error fetching evaluated copies:", error.message);
-//     res.status(500).json({ 
-//       error: "Failed to fetch evaluated copies",
-//       message: error.message
-//     });
-//   }
-// }
-
-
-
-
-//?? *********************
-
-// Add these functions to the existing adminController.js file
-
 /**
  * Assign a subject to an evaluator
  * @param {Object} req - Express request object
@@ -411,6 +375,48 @@ export const assignSubject = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * Get allocation status for a specific subject
+ * @route GET /api/admin/subject-allocation/:subjectCode/:examName
+ * @param {Object} req - Request object with subject code and exam name params
+ * @param {Object} res - Response object
+ * @returns {Object} Subject allocation statistics
+ */
+export const getSubjectAllocationStatus = async (req, res) => {
+  try {
+    const { subjectCode, examName } = req.params;
+    
+    if (!subjectCode || !examName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Subject code and exam name are required' 
+      });
+    }
+    
+    const allocationStatus = await getSubjectAllocationStatusService(subjectCode, examName);
+    
+    return res.status(200).json({
+      success: true,
+      data: allocationStatus,
+      message: `Successfully retrieved allocation status for subject ${subjectCode} in exam ${examName}`
+    });
+  } catch (error) {
+    console.error('Error in getSubjectAllocationStatus controller:', error);
+    
+    // Determine appropriate status code based on error
+    const statusCode = error.status || 500;
+    
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to retrieve subject allocation status',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+
 
 /**
  * Get all subject assignments

@@ -2,7 +2,7 @@ import { DataTypes } from "sequelize";
 
 const defineCopyEval = (sequelize) => {
   const CopyEval = sequelize.define(
-    "CopyEval",
+    "copy_eval",
     {
       sno: {
         type: DataTypes.INTEGER,
@@ -59,12 +59,12 @@ const defineCopyEval = (sequelize) => {
         allowNull: false,
         defaultValue: false,
       },
-      createdat: {
+      created_at: {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: sequelize.literal("GETDATE()"),
       },
-      updatedat: {
+      updated_at: {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: sequelize.literal("GETDATE()"),

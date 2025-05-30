@@ -1,38 +1,37 @@
 import { DataTypes, Sequelize } from 'sequelize';
 
 const defineCopyAssignment = (sequelize) => {
-
-const CopyAssignment = sequelize.define("tbl_copy_assignments", {
-    AssignmentID: {
+  const CopyAssignment = sequelize.define("tbl_copy_assignments", {
+    assignment_id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    CopyBarcode: {
+    copyid: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    EvaluatorID: {
+    evaluator_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    BatchID: {                   // Add this field
+    batch_id: {
       type: DataTypes.INTEGER,
-      allowNull: true,           // Allow null initially for backward compatibility
+      allowNull: true,
     },
-    AssignedBy: {
+    assigned_by: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    AssignedAt: {
+    assigned_at: {
       type: DataTypes.DATE,
       defaultValue: Sequelize.NOW,
     },
-    IsChecked: {
+    is_checked: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
-    CheckedAt: {
+    checked_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
@@ -41,7 +40,6 @@ const CopyAssignment = sequelize.define("tbl_copy_assignments", {
     timestamps: false,
   });
 
-  
   return CopyAssignment;
 };
 

@@ -7,13 +7,13 @@ const defineScanning = (sequelize) => {
       primaryKey: true, 
       autoIncrement: true 
     },
-    ScanId: { 
+    scan_id: { 
       type: DataTypes.STRING 
     },
-    scannedAt: { 
+    scanned_at: { 
       type: DataTypes.DATE 
     },
-    copy_barcode: { 
+    copyid: { 
       type: DataTypes.STRING 
     },
     copypdf: { 

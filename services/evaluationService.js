@@ -1,9 +1,9 @@
 import { sequelize } from "../config/db.js";
 import {
+  Copy,
   CopyAnnotation,
   CopyAssignments,
   CopyEval,
-  EvaluationAutosave,
   Questions,
 } from "../models/index.js";
 
@@ -55,7 +55,7 @@ export const saveEvaluationAndAnnotations = async (data) => {
 
     // Check if CopyAnnotation record already exists
     let annotationRecord = await CopyAnnotation.findOne({
-      where: { copy_id: copyid },
+      where: { copyid: copyid },
       transaction,
     });
 
@@ -72,7 +72,7 @@ export const saveEvaluationAndAnnotations = async (data) => {
     // Create new CopyAnnotation record (only if it doesn't exist)
     await CopyAnnotation.create(
       {
-        copy_id: copyid,
+        copyid: copyid,
         annotations: JSON.stringify(annotations || []),
         draw_annotations: JSON.stringify(drawAnnotations || []),
       },
@@ -82,8 +82,8 @@ export const saveEvaluationAndAnnotations = async (data) => {
     // Update the assignment record to mark it as checked
     const assignment = await CopyAssignments.findOne({
       where: {
-        CopyBarcode: copyid,
-        EvaluatorID: eval_id,
+        copyid: copyid,
+        evaluator_id: eval_id,
       },
       transaction,
     });
@@ -91,20 +91,22 @@ export const saveEvaluationAndAnnotations = async (data) => {
     if (assignment) {
       await assignment.update(
         {
-          IsChecked: true,
-          CheckedAt: new Date(),
+          is_checked: true,
+          checked_at: new Date(),
         },
         { transaction }
       );
     }
 
-    // Update SubjectData to mark the copy as checked
-    await SubjectData.update(
+    // Update the Copy table to mark it as evaluated (single source of truth)
+    await Copy.update(
       {
-        IsChecked: true,
+        is_evaluated: true,
+        evaluation_status: status,
+        current_evaluator_id: eval_id
       },
       {
-        where: { barcode: copyid },
+        where: { copyid: copyid },
         transaction,
       }
     );
@@ -121,6 +123,9 @@ export const saveEvaluationAndAnnotations = async (data) => {
     throw new Error(`Failed to save evaluation: ${error.message}`);
   }
 };
+
+
+
 
 // /**updatedv2
 //  * Save an evaluation data (eval + annotation)
@@ -255,7 +260,7 @@ export const unrejectCopyRecord = async (copyId) => {
 
   // Find the rejected record for the given Copy ID
   const existingRecord = await CopyEval.findOne({
-    where: { copyid: copyId, del: 1 }, // Filter for deleted records
+    where: { copyid: copyId, del: true }, 
   });
 
   if (!existingRecord) {
@@ -268,11 +273,12 @@ export const unrejectCopyRecord = async (copyId) => {
   await existingRecord.update({
     status: "Not-Evaluated",
     reject_reason: "",
-    del: 0,
+    del: false,
   });
 
   return true;
 };
+
 
 /**
  * Get all questions for a specific paper
@@ -290,18 +296,24 @@ export const getQuestionsService = async (paperId) => {
   try {
     // Fetch questions for the specified paper ID
     const questions = await Questions.findAll({
-      where: { PaperID: paperId },
-      attributes: ["Sno", "PaperID", "QNo", "MaxMark"],
-      order: [["QNo", "ASC"]], // Order by question number
+      where: { paper_id: paperId },
+      attributes: ["sno", "paper_id", "q_no", "max_mark"],
+      order: [["q_no", "ASC"]], // Order by question number
       raw: true,
     });
 
+    // Handle empty results gracefully
+    if (!questions || questions.length === 0) {
+      console.log(`No questions found for paper ID: ${paperId}`);
+      return []; // Return empty array instead of error
+    }
+
     // Transform data to match frontend expectations if needed
     const formattedQuestions = questions.map((q) => ({
-      sno: q.Sno,
-      paperId: q.PaperID,
-      qNo: q.QNo,
-      maxMark: parseFloat(q.MaxMark), // Convert to number from decimal
+      sno: q.sno,
+      paperId: q.paper_id,
+      qNo: q.q_no,
+      maxMark: parseFloat(q.max_mark), // Convert to number from decimal
     }));
 
     return formattedQuestions;
@@ -310,6 +322,9 @@ export const getQuestionsService = async (paperId) => {
     throw error;
   }
 };
+
+
+
 
 /**
  * Get copies assigned to an evaluator
@@ -321,44 +336,24 @@ export const getCopiesToEvaluateService = async (evaluatorId) => {
     // Query copy assignments table to get copies assigned to this evaluator
     const assignments = await CopyAssignments.findAll({
       where: {
-        EvaluatorID: evaluatorId,
-        // Only return copies that haven't been fully evaluated yet
-        IsChecked: false,
+        evaluator_id: evaluatorId,
+        is_checked: false,
       },
-      attributes: ["CopyBarcode", "AssignedAt"],
+      attributes: ["copyid", "assigned_at"],
       raw: true,
     });
 
-    // // Format the response to include both copyId and assignedAt
-    // const copies = assignments.map(assignment => ({
-    //   copyId: assignment.CopyBarcode,
-    //   assignedAt: assignment.AssignedAt
-    // }));
-
-    // Check for any partial copies in EvaluationAutosave table
-    const partialCopies = await EvaluationAutosave.findAll({
-      where: {
-        EvaluatorID: evaluatorId,
-      },
-      attributes: ["CopyID"], // Make sure this matches your actual column name
-      raw: true,
-    });
-
-    // Create a Set of partial copy IDs for faster lookup
-    const partialCopyIdsSet = new Set(partialCopies.map((copy) => copy.CopyID));
-
-    // Format the response to include copyId, assignedAt, and partial flag
+    // Format the response to include copyId and assignedAt
     const copies = assignments.map((assignment) => ({
-      copyId: assignment.CopyBarcode,
-      assignedAt: assignment.AssignedAt,
-      partial: partialCopyIdsSet.has(assignment.CopyBarcode), // true if copy exists in autosave, false otherwise
+      copyId: assignment.copyid,
+      assignedAt: assignment.assigned_at,
+      // No partial flag since EvaluationAutosave is deprecated
     }));
 
     // Log results for debugging
     console.log(
       `Found ${copies.length} copies assigned to evaluator ${evaluatorId}`
     );
-    console.log("Assignment data:", { evaluatorId });
     return copies;
   } catch (error) {
     console.error(`Error in getCopiesToEvaluateService: ${error.message}`);
@@ -378,30 +373,23 @@ export const getEvaluationStatsService = async (evaluatorId) => {
     // Get evaluated count
     const evaluatedCount = await CopyAssignments.count({
       where: {
-        EvaluatorID: evaluatorId,
-        IsChecked: true, // Only count copies that have been evaluated
+        evaluator_id: evaluatorId,
+        is_checked: true, // Only count copies that have been evaluated
       },
     });
 
     // Get pending count
     const pendingCount = await CopyAssignments.count({
       where: {
-        EvaluatorID: evaluatorId,
-        IsChecked: false,
-      },
-    });
-
-    //Get partially evaluated count
-    const partialCount = await EvaluationAutosave.count({
-      where: {
-        EvaluatorID: evaluatorId,
+        evaluator_id: evaluatorId,
+        is_checked: false,
       },
     });
 
     // Get total assigned count
     const totalAssigned = await CopyAssignments.count({
       where: {
-        EvaluatorID: evaluatorId,
+        evaluator_id: evaluatorId,
       },
     });
 
@@ -409,14 +397,12 @@ export const getEvaluationStatsService = async (evaluatorId) => {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      partial: partialCount,
     });
 
     return {
       evaluated: evaluatedCount,
       pending: pendingCount,
       total: totalAssigned,
-      partial: partialCount,
     };
   } catch (error) {
     console.error(`Error in getEvaluationStatsService: ${error.message}`);

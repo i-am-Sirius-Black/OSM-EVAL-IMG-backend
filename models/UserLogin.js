@@ -1,51 +1,46 @@
-import { DataTypes } from 'sequelize';
+import { DataTypes } from "sequelize";
 
 const defineUserLogin = (sequelize) => {
-  const UserLogin = sequelize.define(
-    "UserLogin",
-    {
-      Sno: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true, // Auto-incrementing serial number
-      },
-      Name: {
-        type: DataTypes.STRING(100),
-        allowNull: false, // User's name cannot be null
-      },
-      Email: {
-        type: DataTypes.STRING(255),
-        allowNull: false,
-        unique: true, // User's email must be unique
-      },
-      PhoneNumber: {
-        type: DataTypes.STRING(15),
-        allowNull: false, // User's phone number cannot be null
-      },
-      Uid: {
-        type: DataTypes.STRING(50),
-        allowNull: false,
-        unique: true, // User ID must be unique
-      },
-      Pass: {
-        type: DataTypes.STRING(255),
-        allowNull: false, // User's password cannot be null
-      },
-      Role: {
-        type: DataTypes.STRING(50),
-        defaultValue: "evaluator", // Default role
-      },
-      Active: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true, // Default active status
-      },
+  const UserLogin = sequelize.define("UserLogin", {
+    sno: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
     },
-    {
-      tableName: "UserLogin", // Specify the table name
-      timestamps: false, // Set to true if you want Sequelize to manage createdAt and updatedAt fields
-    }
-  );
-  
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    phone_number: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    uid: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    pass: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    role: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+  }, {
+    tableName: "UserLogin",
+    timestamps: false,
+  });
+
   return UserLogin;
 };
 

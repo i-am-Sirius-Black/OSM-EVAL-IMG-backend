@@ -2,32 +2,32 @@ import { DataTypes, Sequelize } from 'sequelize';
 
 const defineSubjectAssignment = (sequelize) => {
   const SubjectAssignment = sequelize.define("tbl_subject_assignments", {
-    AssignmentID: {
+    assignment_id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    SubjectCode: {
+    subject_code: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    ExamName: {
+    exam_name: {
       type: DataTypes.STRING(100),
       allowNull: false,
     },
-    EvaluatorID: {
+    evaluator_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    AssignedBy: {
+    assigned_by: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    AssignedAt: {
+    assigned_at: {
       type: DataTypes.DATE,
       defaultValue: Sequelize.NOW,
     },
-    Active: {
+    active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },

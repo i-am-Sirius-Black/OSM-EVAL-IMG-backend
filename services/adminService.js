@@ -1,4 +1,4 @@
-import { Bagging, CopyAssignments, CopyBatchAssignment, CopyEval, CopyGunning, CopyReevaluation, SubjectAssignment, SubjectData, UserLogin } from "../models/index.js";
+import { Copy, CopyAssignments, CopyBatchAssignment, CopyEval, CopyReevaluation, SubjectAssignment, SubjectData, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -20,8 +20,8 @@ export const adminLoginService = async (uid, pass) => {
   // First, find the admin user by UID
   const record = await UserLogin.findOne({ 
     where: { 
-      Uid: uid, 
-      Role: "admin" 
+      uid: uid, 
+      role: "admin" 
     } 
   });
 
@@ -33,7 +33,7 @@ export const adminLoginService = async (uid, pass) => {
   }
 
   // Verify password
-  const isMatch = await bcrypt.compare(pass, record.Pass);
+  const isMatch = await bcrypt.compare(pass, record.pass);
 
   // If password doesn't match
   if (!isMatch) {
@@ -45,8 +45,8 @@ export const adminLoginService = async (uid, pass) => {
   // Generate JWT token
   const token = jwt.sign(
     {
-      uid: record.Uid,
-      role: record.Role,
+      uid: record.uid,
+      role: record.role,
     },
     JWT_SECRET,
     {
@@ -56,12 +56,12 @@ export const adminLoginService = async (uid, pass) => {
 
   // Return user data without sensitive information
   const userData = {
-    uid: record.Uid,
-    name: record.Name,
-    email: record.Email,
-    phoneNumber: record.PhoneNumber,
-    role: record.Role,
-    active: record.Active,
+    uid: record.uid,
+    name: record.name,
+    email: record.email,
+    phoneNumber: record.phoneNumber,
+    role: record.role,
+    active: record.active,
   };
 
   return { token, userData };
@@ -78,18 +78,18 @@ export const getEvaluatorsService = async () => {
   try {
     const evaluators = await UserLogin.findAll({
       where: {
-        Role: 'evaluator'
+        role: 'evaluator'
       },
-      attributes: ['Uid', 'Name', 'Email', 'PhoneNumber', 'Active']
+      attributes: ['uid', 'name', 'email', 'phone_number', 'active']
     });
     
     // Map the database column names to more standard camelCase for API responses
     return evaluators.map(evaluator => ({
-      uid: evaluator.Uid,
-      name: evaluator.Name,
-      email: evaluator.Email,
-      phoneNumber: evaluator.PhoneNumber,
-      active: evaluator.Active
+      uid: evaluator.uid,
+      name: evaluator.name,
+      email: evaluator.email,
+      phoneNumber: evaluator.phone_number,
+      active: evaluator.active
     }));
   } catch (error) {
     console.error('Error in getEvaluatorsService:', error);
@@ -113,8 +113,8 @@ export const activateEvaluatorService = async (uid) => {
     // Find the evaluator
     const evaluator = await UserLogin.findOne({
       where: { 
-        Uid: uid,
-        Role: 'evaluator'
+        uid: uid,
+        role: 'evaluator'
       }
     });
     
@@ -125,22 +125,22 @@ export const activateEvaluatorService = async (uid) => {
     }
     
     // Check if already active
-    if (evaluator.Active) {
+    if (evaluator.active) {
       return {
         success: true,
         message: "Evaluator is already active",
         evaluator: {
-          uid: evaluator.Uid,
-          name: evaluator.Name,
-          email: evaluator.Email,
-          phoneNumber: evaluator.PhoneNumber,
-          active: evaluator.Active
+          uid: evaluator.uid,
+          name: evaluator.name,
+          email: evaluator.email,
+          phoneNumber: evaluator.phone_number,
+          active: evaluator.active
         }
       };
     }
     
     // Update evaluator status
-    evaluator.Active = true;
+    evaluator.active = true;
     await evaluator.save();
     
     console.log(`Evaluator ${uid} activated successfully`);
@@ -149,11 +149,11 @@ export const activateEvaluatorService = async (uid) => {
       success: true,
       message: "Evaluator activated successfully",
       evaluator: {
-        uid: evaluator.Uid,
-        name: evaluator.Name,
-        email: evaluator.Email,
-        phoneNumber: evaluator.PhoneNumber,
-        active: evaluator.Active
+        uid: evaluator.uid,
+        name: evaluator.name,
+        email: evaluator.email,
+        phoneNumber: evaluator.phone_number,
+        active: evaluator.active
       }
     };
   } catch (error) {
@@ -172,8 +172,8 @@ export const deactivateEvaluatorService = async (uid) => {
     // Find the evaluator
     const evaluator = await UserLogin.findOne({
       where: { 
-        Uid: uid,
-        Role: 'evaluator'
+        uid: uid,
+        role: 'evaluator'
       }
     });
     
@@ -184,22 +184,22 @@ export const deactivateEvaluatorService = async (uid) => {
     }
     
     // Check if already inactive
-    if (!evaluator.Active) {
+    if (!evaluator.active) {
       return {
         success: true,
         message: "Evaluator is already inactive",
         evaluator: {
-          uid: evaluator.Uid,
-          name: evaluator.Name,
-          email: evaluator.Email,
-          phoneNumber: evaluator.PhoneNumber,
-          active: evaluator.Active
+          uid: evaluator.uid,
+          name: evaluator.name,
+          email: evaluator.email,
+          phoneNumber: evaluator.phone_number ,
+          active: evaluator.active
         }
       };
     }
     
     // Update evaluator status
-    evaluator.Active = false;
+    evaluator.active = false;
     await evaluator.save();
     
     console.log(`Evaluator ${uid} deactivated successfully`);
@@ -208,11 +208,11 @@ export const deactivateEvaluatorService = async (uid) => {
       success: true,
       message: "Evaluator deactivated successfully",
       evaluator: {
-        uid: evaluator.Uid,
-        name: evaluator.Name,
-        email: evaluator.Email,
-        phoneNumber: evaluator.PhoneNumber,
-        active: evaluator.Active
+        uid: evaluator.uid,
+        name: evaluator.name,
+        email: evaluator.email,
+        phoneNumber: evaluator.phone_number,
+        active: evaluator.active
       }
     };
   } catch (error) {
@@ -354,18 +354,18 @@ export const getEvaluatorsStatusService = async () => {
     // Step 1: Get all distinct evaluator IDs
     const evaluators = await CopyAssignments.findAll({
       attributes: [
-        'EvaluatorID',
-        [sequelize.fn('COUNT', sequelize.col('AssignmentID')), 'totalAssigned'],
-        [sequelize.fn('SUM', sequelize.literal('CASE WHEN IsChecked = 1 THEN 1 ELSE 0 END')), 'checked'],
-        [sequelize.fn('SUM', sequelize.literal('CASE WHEN IsChecked = 0 THEN 1 ELSE 0 END')), 'pending']
+        'evaluator_id',
+        [sequelize.fn('COUNT', sequelize.col('assignment_id')), 'totalAssigned'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN is_checked = 1 THEN 1 ELSE 0 END')), 'checked'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN is_checked = 0 THEN 1 ELSE 0 END')), 'pending']
       ],
-      group: ['EvaluatorID'],
+      group: ['evaluator_id'],
       raw: true
     });
 
     // Map the results to the desired format
     const evaluatorStats = evaluators.map(evaluator => ({
-      evaluatorId: evaluator.EvaluatorID,
+      evaluatorId: evaluator.evaluator_id,
       totalAssigned: parseInt(evaluator.totalAssigned) || 0,
       checked: parseInt(evaluator.checked) || 0, 
       pending: parseInt(evaluator.pending) || 0
@@ -377,19 +377,19 @@ export const getEvaluatorsStatusService = async () => {
     if (evaluatorIds.length > 0) {
       const evaluatorDetails = await UserLogin.findAll({
         where: {
-          Uid: evaluatorIds,
-          Role: 'evaluator'
+          uid: evaluatorIds,
+          role: 'evaluator'
         },
-        attributes: ['Uid', 'Name', 'Email'],
+        attributes: ['uid', 'name', 'email'],
         raw: true
       });
 
       // Create a lookup map for quick access
       const evaluatorMap = {};
       evaluatorDetails.forEach(detail => {
-        evaluatorMap[detail.Uid] = {
-          name: detail.Name,
-          email: detail.Email
+        evaluatorMap[detail.uid] = {
+          name: detail.name,
+          email: detail.email
         };
       });
 
@@ -398,6 +398,9 @@ export const getEvaluatorsStatusService = async () => {
         if (evaluatorMap[stat.evaluatorId]) {
           stat.name = evaluatorMap[stat.evaluatorId].name;
           stat.email = evaluatorMap[stat.evaluatorId].email;
+        } else {
+          stat.name = 'Unknown';
+          stat.email = 'Unknown';
         }
       });
     }
@@ -412,99 +415,112 @@ export const getEvaluatorsStatusService = async () => {
 
 
 
-/** ---v2
+/** 
  * Get all Evaluated/checked copies with filtering options
  * @param {Object} filters - Optional filters (course, subject, session, etc.)
  * @returns {Promise<Array>} Filtered evaluated copies
  */
 export const EvaluatedCopiesService = async (filters = {}) => {
   try {
-    const { course, subject, session, evaluatorId } = filters;
+    const { evaluatorId } = filters;
     
-    // Build the where clause for CopyEval
-    const whereClause = { 
-      del: false,
-      // Add more conditions if needed
+    // Simple query to get evaluated copies
+    const whereClause = {
+      [Op.or]: [
+        { is_evaluated: true },
+        { is_reevaluated: true }
+      ]
     };
     
     // Add evaluator filter if provided
     if (evaluatorId) {
-      whereClause.eval_id = evaluatorId;
+      whereClause.current_evaluator_id = evaluatorId;
     }
     
-    // Base query with subject data include
-    const queryOptions = {
+    // Get all evaluated copies with just the needed fields
+    const evaluatedCopies = await Copy.findAll({
       where: whereClause,
-      attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time', 'status', 'createdat', 'updatedat'],
-      include: [{
-        model: SubjectData,
-        as: 'subjectData',
-        required: true,
-        attributes: ['Course', 'Subject', 'SubjectID', 'ExamDate']
-      }]
-    };
+      attributes: [
+        'copyid',
+        'evaluation_status',
+        'created_at',
+        'updated_at',
+        'is_evaluated',
+        'is_reevaluated',
+        'current_evaluator_id'
+      ],
+      raw: true
+    });
     
-    // Add course, subject, and session filters to the include
-    if (course || subject || session) {
-      const subjectWhere = {};
-      
-      if (course) subjectWhere.Course = course;
-      if (subject) subjectWhere.Subject = subject;
-      // if (session) {
-      //   // Assuming ExamDate can be used to filter by session/year
-      //   subjectWhere.ExamDate = {
-      //     [Op.like]: `${session}%` // This will match dates starting with the session year
-      //   };
-      // }
-      if (session) {
-        // Convert ExamDate to string and check year part
-        subjectWhere.ExamDate = sequelize.where(
-          sequelize.fn('YEAR', sequelize.col('ExamDate')), 
-          session
-        );
-      }
-      
-      queryOptions.include[0].where = subjectWhere;
-    }
-    
-    const evaluatedCopies = await CopyEval.findAll(queryOptions);
-
-    // Return proper data structure with all relevant fields
-    return evaluatedCopies.map(record => ({
-      copyId: record.copyid,
-      evaluatorId: record.eval_id,
-      obtainedMarks: record.obt_mark,
-      maxMarks: record.max_mark,
-      evaluationTime: record.eval_time,
-      status: record.status,
-      createdAt: record.createdat,
-      updatedAt: record.updatedat,
-      // Add subject data
-      course: record.subjectData?.Course || 'Unknown',
-      subject: record.subjectData?.Subject || 'Unknown',
-      subjectCode: record.subjectData?.SubjectID || 'Unknown',
-      examDate: record.subjectData?.ExamDate || null
+    // Map to the desired response format
+    return evaluatedCopies.map(copy => ({
+      copyId: copy.copyid,
+      evaluatorId: copy.current_evaluator_id,
+      status: copy.evaluation_status,
+      isEvaluated: copy.is_evaluated,
+      isReevaluated: copy.is_reevaluated,
+      createdAt: copy.created_at,
+      updatedAt: copy.updated_at
     }));
+    
   } catch (error) {
     console.error("Error in EvaluatedCopiesService:", error);
     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
   }
 };
 
-
-
-// /**
-//  * Get all Evaluated/checked copies
+// /** 
+//  * Get all Evaluated/checked copies with filtering options
+//  * @param {Object} filters - Optional filters (course, subject, session, etc.)
+//  * @returns {Promise<Array>} Filtered evaluated copies
 //  */
-// export const EvaluatedCopiesService = async () => {
+// export const EvaluatedCopiesService = async (filters = {}) => {
+
 //   try {
-//     const evaluatedCopies = await CopyEval.findAll({
-//       where: { 
-//         del: false,
-//         // status: 'Evaluated' // Ensure we only get evaluated copies
-//       },
-//       attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time','status', 'createdat', 'updatedat'],
-//     });
+//     const { course, subject, session, evaluatorId } = filters;
+    
+//     // Build the where clause for CopyEval
+//     const whereClause = { 
+//       del: false,
+//       status: 'Evaluated' // Only fetch evaluated copies
+//     };
+    
+//     // Add evaluator filter if provided
+//     if (evaluatorId) {
+//       whereClause.eval_id = evaluatorId;
+//     }
+    
+//     // Base query with subject data include
+//     const queryOptions = {
+//       where: whereClause,
+//       attributes: ['copyid', 'eval_id', 'obt_mark', 'max_mark', 'eval_time', 'status', 'createdat', 'updatedat'],
+//       include: [{
+//         model: SubjectData,
+//         as: 'subjectData',
+//         required: true,
+//         attributes: ['course', 'subject', 'subject_id', 'exam_date']
+//       }]
+//     };
+    
+//     // Add course, subject, and session filters to the include
+//     if (course || subject || session) {
+//       const subjectWhere = {};
+      
+//       if (course) subjectWhere.course = course;
+//       if (subject) subjectWhere.subject = subject;
+      
+//       if (session) {
+//         // Convert ExamDate to string and check year part
+//         subjectWhere.exam_date = sequelize.where(
+//           sequelize.fn('YEAR', sequelize.col('exam_date')), 
+//           session
+//         );
+//       }
+      
+//       queryOptions.include[0].where = subjectWhere;
+//     }
+    
+//     const evaluatedCopies = await CopyEval.findAll(queryOptions);
 
 //     // Return proper data structure with all relevant fields
 //     return evaluatedCopies.map(record => ({
@@ -515,7 +531,12 @@ export const EvaluatedCopiesService = async (filters = {}) => {
 //       evaluationTime: record.eval_time,
 //       status: record.status,
 //       createdAt: record.createdat,
-//       updatedAt: record.updatedat
+//       updatedAt: record.updatedat,
+//       // Add subject data
+//       course: record.subjectData?.course || 'Unknown',
+//       subject: record.subjectData?.subject || 'Unknown',
+//       subjectCode: record.subjectData?.subject_id || 'Unknown',
+//       examDate: record.subjectData?.exam_date || null
 //     }));
 //   } catch (error) {
 //     console.error("Error in EvaluatedCopiesService:", error);
@@ -526,38 +547,22 @@ export const EvaluatedCopiesService = async (filters = {}) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-//? *********************************************
-
-// Add these functions to the existing adminService.js file
-
 /**
- * Assign a subject to an evaluator
+ * Assign a subject to an evaluator (*Checking existing assignments and reactivating if again assigned)
  * @param {string} evaluatorId - ID of the evaluator
  * @param {string} subjectCode - Subject code to assign
  * @param {string} examName - Name of the exam
- * @param {string} slotName - Name of the slot
  * @param {string} assignedBy - Admin user ID making the assignment
- * @returns {Promise<Object>} - Created subject assignment record
+ * @returns {Promise<Object>} - Created or reactivated subject assignment record
  */
 export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examName, assignedBy) => {
   try {
     // Validate evaluator exists and is active
     const evaluator = await UserLogin.findOne({ 
       where: { 
-        Uid: evaluatorId, 
-        Role: 'evaluator', 
-        Active: true 
+        uid: evaluatorId, 
+        role: 'evaluator', 
+        active: true 
       } 
     });
     
@@ -568,27 +573,77 @@ export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examNam
     }
 
     // Check if this subject is already assigned to this evaluator
-    const existingAssignment = await SubjectAssignment.findOne({
+    const existingActiveAssignment = await SubjectAssignment.findOne({
       where: {
-        EvaluatorID: evaluatorId,
-        SubjectCode: subjectCode,
-        ExamName: examName,
-        Active: true
+        evaluator_id: evaluatorId,
+        subject_code: subjectCode,
+        exam_name: examName,
+        active: true
       }
     });
 
-    if (existingAssignment) {
-      return existingAssignment; // Subject already assigned to this evaluator
+    if (existingActiveAssignment) {
+      return existingActiveAssignment; // Subject already assigned to this evaluator
     }
 
-    // Create a new subject assignment
+    // NEW: Check if this subject was previously assigned but is now inactive
+    const existingInactiveAssignment = await SubjectAssignment.findOne({
+      where: {
+        evaluator_id: evaluatorId,
+        subject_code: subjectCode,
+        exam_name: examName,
+        active: false
+      }
+    });
+
+    // Check if there are any unassigned copies available for this subject
+    const subjectData = await SubjectData.findOne({
+      where: { SubjectID: subjectCode },
+      attributes: ['subjectdata_id'],
+      raw: true,
+    });
+    
+    if (!subjectData) {
+      throw new Error(`Subject with code ${subjectCode} not found`);
+    }
+    
+    // Count available unassigned copies
+    const availableCopiesCount = await Copy.count({
+      where: {
+        subjectdata_id: subjectData.subjectdata_id,
+        is_assigned: false,
+        is_evaluated: false,
+      }
+    });
+    
+    if (availableCopiesCount === 0) {
+      const error = new Error(`No unassigned copies available for subject ${subjectCode}. Cannot assign to evaluator.`);
+      error.status = 400;
+      throw error;
+    }
+
+    // If there's an inactive assignment, reactivate it instead of creating a new one
+    if (existingInactiveAssignment) {
+      console.log(`Reactivating previously assigned subject ${subjectCode} for evaluator ${evaluatorId}`);
+      
+      // Update the existing assignment
+      await existingInactiveAssignment.update({
+        active: true,
+        assigned_by: assignedBy,
+        assigned_at: new Date()
+      });
+      
+      return existingInactiveAssignment;
+    }
+
+    // Create a new subject assignment (only if no inactive assignment exists)
     const subjectAssignment = await SubjectAssignment.create({
-      SubjectCode: subjectCode,
-      ExamName: examName,
-      EvaluatorID: evaluatorId,
-      AssignedBy: assignedBy,
-      AssignedAt: new Date(),
-      Active: true
+      subject_code: subjectCode,
+      exam_name: examName,
+      evaluator_id: evaluatorId,
+      assigned_by: assignedBy,
+      assigned_at: new Date(),
+      active: true
     });
 
     return subjectAssignment;
@@ -598,39 +653,141 @@ export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examNam
   }
 };
 
-/**
- * Get all subjects assigned to evaluators
- * @returns {Promise<Array>} - List of subject assignments with evaluator details
- */
-// export const getSubjectAssignmentsService = async () => {
+
+
+// /**
+//  * Assign a subject to an evaluator
+//  * @param {string} evaluatorId - ID of the evaluator
+//  * @param {string} subjectCode - Subject code to assign
+//  * @param {string} examName - Name of the exam
+//  * @param {string} assignedBy - Admin user ID making the assignment
+//  * @returns {Promise<Object>} - Created subject assignment record
+//  */
+// export const assignSubjectToEvaluator = async (evaluatorId, subjectCode, examName, assignedBy) => {
 //   try {
-//     const assignments = await SubjectAssignment.findAll({
-//       where: { Active: true },
-//       include: [
-//         {
-//           model: UserLogin,
-//           attributes: ['Name', 'Email'],
-//           required: false
-//         }
-//       ]
+//     // Validate evaluator exists and is active
+//     const evaluator = await UserLogin.findOne({ 
+//       where: { 
+//         uid: evaluatorId, 
+//         role: 'evaluator', 
+//         active: true 
+//       } 
+//     });
+    
+//     if (!evaluator) {
+//       const error = new Error(`Evaluator with ID ${evaluatorId} not found or not active`);
+//       error.status = 404;
+//       throw error;
+//     }
+
+//     // Check if this subject is already assigned to this evaluator
+//     const existingAssignment = await SubjectAssignment.findOne({
+//       where: {
+//         evaluator_id: evaluatorId,
+//         subject_code: subjectCode,
+//         exam_name: examName,
+//         active: true
+//       }
 //     });
 
-//     return assignments.map(assignment => ({
-//       assignmentId: assignment.AssignmentID,
-//       subjectCode: assignment.SubjectCode,
-//       examName: assignment.ExamName,
-//       evaluatorId: assignment.EvaluatorID,
-//       evaluatorName: assignment.UserLogin?.Name || 'Unknown',
-//       evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
-//       assignedBy: assignment.AssignedBy,
-//       assignedAt: assignment.AssignedAt,
-//       active: assignment.Active
-//     }));
+//     if (existingAssignment) {
+//       return existingAssignment; // Subject already assigned to this evaluator
+//     }
+
+//     //*: Check if there are any unassigned copies available for this subject
+//     const subjectData = await SubjectData.findOne({
+//       where: { SubjectID: subjectCode },
+//       attributes: ['subjectdata_id'],
+//       raw: true,
+//     });
+    
+//     if (!subjectData) {
+//       throw new Error(`Subject with code ${subjectCode} not found`);
+//     }
+    
+//     // Count available unassigned copies
+//     const availableCopiesCount = await Copy.count({
+//       where: {
+//         subjectdata_id: subjectData.subjectdata_id,
+//         is_assigned: false,
+//         is_evaluated: false,
+//       }
+//     });
+    
+//     if (availableCopiesCount === 0) {
+//       const error = new Error(`No unassigned copies available for subject ${subjectCode}. Cannot assign to evaluator.`);
+//       error.status = 400;
+//       throw error;
+//     }
+
+//     // Create a new subject assignment
+//     const subjectAssignment = await SubjectAssignment.create({
+//       subject_code: subjectCode,
+//       exam_name: examName,
+//       evaluator_id: evaluatorId,
+//       assigned_by: assignedBy,
+//       assigned_at: new Date(),
+//       active: true
+//     });
+
+//     return subjectAssignment;
 //   } catch (error) {
-//     console.error('Error in getSubjectAssignmentsService:', error);
-//     throw new Error(`Failed to retrieve subject assignments: ${error.message}`);
+//     console.error('Error in assignSubjectToEvaluator:', error);
+//     throw error;
 //   }
 // };
+
+
+/** * Get allocation status for a specific subject
+ * 
+*/
+export const getSubjectAllocationStatusService = async (subjectCode, examName) => {
+  try {
+    const subjectData = await SubjectData.findOne({
+      where: { SubjectID: subjectCode },
+      attributes: ['subjectdata_id'],
+      raw: true,
+    });
+    
+    if (!subjectData) {
+      throw new Error(`Subject with code ${subjectCode} not found`);
+    }
+    
+    // Get total, assigned and evaluated counts
+    const totalCopies = await Copy.count({
+      where: { subjectdata_id: subjectData.subjectdata_id }
+    });
+    
+    const assignedCopies = await Copy.count({
+      where: { 
+        subjectdata_id: subjectData.subjectdata_id,
+        is_assigned: true
+      }
+    });
+    
+    const evaluatedCopies = await Copy.count({
+      where: {
+        subjectdata_id: subjectData.subjectdata_id,
+        is_evaluated: true
+      }
+    });
+    
+    return {
+      totalCopies,
+      assignedCopies,
+      evaluatedCopies,
+      availableCopies: totalCopies - assignedCopies,
+      completionPercentage: totalCopies > 0 ? Math.round((evaluatedCopies / totalCopies) * 100) : 0
+    };
+  } catch (error) {
+    console.error('Error in getSubjectAllocationStatus:', error);
+    throw error;
+  }
+};
+
+
+
+
 
 
 /**
@@ -641,11 +798,12 @@ export const getSubjectAssignmentsService = async () => {
   try {
     // Get all active subject assignments with evaluator info
     const assignments = await SubjectAssignment.findAll({
-      where: { Active: true },
+      where: { active: true },
       include: [
         {
           model: UserLogin,
-          attributes: ['Name', 'Email'],
+          as: 'evaluator', 
+          attributes: ['name', 'email'],
           required: false
         }
       ]
@@ -653,32 +811,32 @@ export const getSubjectAssignmentsService = async () => {
 
     // Get all active batches in a separate query
     const activeBatches = await CopyBatchAssignment.findAll({
-      where: { IsActive: true },
-      attributes: ['EvaluatorID', 'SubjectCode'],
+      where: { is_active: true },
+      attributes: ['evaluator_id', 'subject_code'],
       raw: true
     });
 
     // Create a simple lookup map for quick batch status checking
     const activeBatchMap = {};
     activeBatches.forEach(batch => {
-      const key = `${batch.EvaluatorID}:${batch.SubjectCode}`;
+      const key = `${batch.evaluator_id}:${batch.subject_code}`;
       activeBatchMap[key] = true;
     });
 
     // Map assignments with batch status check
     return assignments.map(assignment => {
-      const key = `${assignment.EvaluatorID}:${assignment.SubjectCode}`;
+      const key = `${assignment.evaluator_id}:${assignment.subject_code}`;
       
       return {
-        assignmentId: assignment.AssignmentID,
-        subjectCode: assignment.SubjectCode,
-        examName: assignment.ExamName,
-        evaluatorId: assignment.EvaluatorID,
-        evaluatorName: assignment.UserLogin?.Name || 'Unknown',
-        evaluatorEmail: assignment.UserLogin?.Email || 'Unknown',
-        assignedBy: assignment.AssignedBy,
-        assignedAt: assignment.AssignedAt,
-        active: assignment.Active,
+        assignmentId: assignment.assignment_id,
+        subjectCode: assignment.subject_code,
+        examName: assignment.exam_name,
+        evaluatorId: assignment.evaluator_id,
+        evaluatorName: assignment.evaluator?.name || 'Unknown',
+        evaluatorEmail: assignment.evaluator?.email || 'Unknown',
+        assignedBy: assignment.assigned_by,
+        assignedAt: assignment.assigned_at,
+        active: assignment.active,
         hasActiveBatch: !!activeBatchMap[key] // Will be true if key exists in map
       };
     });
@@ -702,9 +860,9 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
     // Find the assignment to confirm it exists
     const existingAssignment = await SubjectAssignment.findOne({
       where: {
-        EvaluatorID: evaluatorId,
-        SubjectCode: subjectCode,
-        Active: true
+        evaluator_id: evaluatorId,
+        subject_code: subjectCode,
+        active: true
       }
     });
 
@@ -718,17 +876,17 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
     // Modified to also check expiration time
     const activeBatch = await CopyBatchAssignment.findOne({
       where: {
-        EvaluatorID: evaluatorId,
-        SubjectCode: subjectCode,
-        IsActive: true,
-        ExpiresAt: {
+        evaluator_id: evaluatorId,
+        subject_code: subjectCode,
+        is_active: true,
+        expires_at: {
           [Op.gt]: new Date() // Not expired yet
         }
       }
     });
 
     if (activeBatch) {
-      const error = new Error(`Cannot unassign subject as evaluator has active copies assigned for this subject`);
+      const error = new Error(`Active copies exist - cannot unassign`);
       error.status = 400;
       throw error;
     }
@@ -736,27 +894,27 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
     // Force cleanup of any expired batches before unassigning
     // This handles cases where the batch is expired but still marked as active
     await CopyBatchAssignment.update(
-      { IsActive: false },
+      { is_active: false },
       {
         where: {
-          EvaluatorID: evaluatorId,
-          SubjectCode: subjectCode,
-          IsActive: true,
-          ExpiresAt: {
+          evaluator_id: evaluatorId,
+          subject_code: subjectCode,
+          is_active: true,
+          expires_at: {
             [Op.lte]: new Date() // Already expired
           }
         }
       }
     );
 
-    // Update the assignment to set Active = false
+    // Update the assignment to set active = false
     const updatedCount = await SubjectAssignment.update(
-      { Active: false },
+      { active: false },
       {
         where: {
-          EvaluatorID: evaluatorId,
-          SubjectCode: subjectCode,
-          Active: true
+          evaluator_id: evaluatorId,
+          subject_code: subjectCode,
+          active: true
         }
       }
     );
@@ -774,6 +932,9 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
 };
 
 
+
+
+//*V2 - single source clean
 
 /**
  * Assign a copy to an evaluator for re-evaluation
@@ -831,23 +992,36 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
       throw error;
     }
     
-    // Verify the copy exists (outside transaction)
-    const copyExists = await SubjectData.findOne({
+    // Check if the copy exists in the Copy table
+    const copyRecord = await Copy.findOne({
       where: {
-        barcode: copyId
+        copyid: copyId
       }
     });
     
-    if (!copyExists) {
-      const error = new Error(`Copy with ID ${copyId} not found`);
+    if (!copyRecord) {
+      const error = new Error(`Copy with ID ${copyId} not found in the system`);
       error.status = 404;
       throw error;
     }
 
-    // Start the transaction only for the insert operation
+    // Start the transaction for both operations
     transaction = await sequelize.transaction();
     
     console.log("Starting transaction for reevaluation assignment");
+
+    // Update the Copy record to set is_re_assigned flag
+    await Copy.update(
+      {
+        is_re_assigned: true,
+        current_evaluator_id: assignedEvaluatorId,
+        updated_at: new Date()
+      },
+      {
+        where: { copyid: copyId },
+        transaction
+      }
+    );
 
     // Create a new re-evaluation request
     const reevaluationRequest = await CopyReevaluation.create({
@@ -864,6 +1038,7 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
     await transaction.commit();
     console.log("Transaction committed successfully");
 
+    // Prepare response with copy details
     return {
       requestId: reevaluationRequest.RequestID,
       copyId: reevaluationRequest.CopyID,
@@ -871,7 +1046,13 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
       status: reevaluationRequest.Status,
       assignedAt: reevaluationRequest.AssignedAt,
       originalMarks: reevaluationRequest.OriginalMarks,
-      originalEvaluatorId: reevaluationRequest.OriginalEvaluatorID
+      originalEvaluatorId: reevaluationRequest.OriginalEvaluatorID,
+      copyDetails: {
+        course: copyRecord.course,
+        subjectName: copyRecord.subject_name,
+        subjectCode: copyRecord.subject_id,
+        examDate: copyRecord.exam_date
+      }
     };
   } catch (error) {
     console.error('Error in assignCopyReevaluationService:', error);
@@ -891,6 +1072,7 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
 };
 
 
+
 // /**
 //  * Assign a copy to an evaluator for re-evaluation
 //  * @param {string} copyId
@@ -898,76 +1080,72 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
 //  * @returns {Promise<Object>} 
 //  */
 // export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId) => {
-//   const transaction = await sequelize.transaction();
-// console.log("Reevaluation form data->", copyId, assignedEvaluatorId);
-
+//   let transaction;
+  
 //   try {
-//     // Check if copyid exists in copyeval (means it's evaluated, then only we'll allow reeval)
+//     // First check if the copy is evaluated (outside transaction)
 //     const isEvaluated = await CopyEval.findOne({
 //       where: {
 //         copyid: copyId,
 //         del: 0,
 //         status: 'Evaluated' // Ensure the copy is fully evaluated
-//       },
-//       transaction
+//       }
 //     });
 
 //     if (!isEvaluated) {
-//       await transaction.rollback();
 //       const error = new Error(`Copy ${copyId} has not been evaluated yet and cannot be re-evaluated`);
 //       error.status = 400; // Bad Request
 //       throw error;
 //     }
 
-//     // First check if this copy already has an active re-evaluation request
+//     // Check for existing requests (outside transaction)
 //     const existingRequest = await CopyReevaluation.findOne({
 //       where: {
 //         CopyID: copyId,
 //         Status: {
 //           [Op.in]: ['Pending', 'Assigned'] // Active statuses
 //         }
-//       },
-//       transaction
+//       }
 //     });
 
 //     if (existingRequest) {
-//       await transaction.rollback();
 //       const error = new Error(`Copy ${copyId} already has an active re-evaluation request`);
 //       error.status = 409; // Conflict
 //       throw error;
 //     }
 
-//     // Verify the evaluator exists and is active
+//     // Verify the evaluator exists (outside transaction)
 //     const evaluator = await UserLogin.findOne({
 //       where: {
 //         Uid: assignedEvaluatorId,
 //         Role: 'evaluator',
 //         Active: true
-//       },
-//       transaction
+//       }
 //     });
 
 //     if (!evaluator) {
-//       await transaction.rollback();
 //       const error = new Error(`Evaluator with ID ${assignedEvaluatorId} not found or not active`);
 //       error.status = 404;
 //       throw error;
 //     }
     
-//     // Verify the copy exists
+//     // Verify the copy exists (outside transaction)
 //     const copyExists = await SubjectData.findOne({
 //       where: {
 //         barcode: copyId
-//       },
-//       transaction
+//       }
 //     });
     
 //     if (!copyExists) {
-//       await transaction.rollback();
 //       const error = new Error(`Copy with ID ${copyId} not found`);
 //       error.status = 404;
 //       throw error;
 //     }
+
+//     // Start the transaction only for the insert operation
+//     transaction = await sequelize.transaction();
+    
+//     console.log("Starting transaction for reevaluation assignment");
 
 //     // Create a new re-evaluation request
 //     const reevaluationRequest = await CopyReevaluation.create({
@@ -976,10 +1154,13 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
 //       AssignedEvaluatorID: assignedEvaluatorId,
 //       AssignedAt: new Date(),
 //       Reason: 'Administrative re-evaluation request',
+//       OriginalEvaluatorID: isEvaluated.eval_id,
+//       OriginalMarks: isEvaluated.obt_mark
 //     }, { transaction });
 
 //     // Commit the transaction
 //     await transaction.commit();
+//     console.log("Transaction committed successfully");
 
 //     return {
 //       requestId: reevaluationRequest.RequestID,
@@ -987,13 +1168,22 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
 //       evaluatorId: reevaluationRequest.AssignedEvaluatorID,
 //       status: reevaluationRequest.Status,
 //       assignedAt: reevaluationRequest.AssignedAt,
+//       originalMarks: reevaluationRequest.OriginalMarks,
+//       originalEvaluatorId: reevaluationRequest.OriginalEvaluatorID
 //     };
 //   } catch (error) {
-//     // Make sure to rollback if not already done
-//     if (transaction.finished !== 'rollback') {
-//       await transaction.rollback();
-//     }
 //     console.error('Error in assignCopyReevaluationService:', error);
+    
+//     // Only try to rollback if we have an active transaction
+//     if (transaction && !transaction.finished) {
+//       try {
+//         console.log("Rolling back transaction due to error");
+//         await transaction.rollback();
+//       } catch (rollbackError) {
+//         console.error('Error rolling back transaction:', rollbackError);
+//       }
+//     }
+    
 //     throw error; 
 //   }
 // };
@@ -1287,152 +1477,115 @@ const generateNewUID = async () => {
 //** Get checked Copies */
 
 /**
- * Get checked (evaluated) copies by packing ID
- * @param {string} packingId - The packing ID to get checked copies for
+ * Get checked (evaluated) copies by pack ID
+ * @param {string} packId - The pack ID to get checked copies for
  * @returns {Promise<Object>} Details of checked copies
  */
-
-
-//?v2
-export const getCheckedCopiesService = async (packingId) => {
-  if (!packingId) {
-    const error = new Error("Packing ID is required");
+export const getCheckedCopiesService = async (packId) => {
+  if (!packId) {
+    const error = new Error("Pack ID is required");
     error.status = 400;
     throw error;
   }
 
   try {
-    // Step 1: Find all BagIDs for the PackingID
-    const baggingRecords = await Bagging.findAll({
-      where: { PackingID: packingId },
-      attributes: ["BagID"],
+    // Step 1: Find all copies for the given packId
+    const copies = await Copy.findAll({
+      where: { pack_id: packId },
+      attributes: ['copyid', 'bag_id', 'pack_id'],
       raw: true,
     });
 
-    if (!baggingRecords || baggingRecords.length === 0) {
-      const error = new Error("No bags found for the given packing ID");
-      error.status = 404;
-      throw error;
-    }
-
-    const bagIds = baggingRecords.map((record) => record.BagID);
-    console.log("bagids", bagIds);
-    
-    // Step 2: Find all CopyBarcodes for the BagIDs
-    const gunningRecords = await CopyGunning.findAll({
-      where: { BagID: bagIds, IsScanned: 1 },
-      attributes: ["CopyBarcode", "BagID"],
-      raw: true,
-    });
-
-    console.log("Gunning records found:", gunningRecords.length);
-    if (gunningRecords.length > 0) {
-      console.log("Sample gunning record:", gunningRecords[0]);
-    }
-    
-    if (!gunningRecords || gunningRecords.length === 0) {
+    if (!copies || copies.length === 0) {
       return {
         checkedCount: 0,
         checkedCopies: [],
-        message: "No copies found for the given bags"
+        message: "No copies found for the given pack ID"
       };
     }
 
-    // Get all copy barcodes
-    const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
-    console.log("All copy barcodes:", allCopyBarcodes);
-    
-    // Find checked copies from CopyAssignments first
+    const copyIds = copies.map(c => c.copyid);
+
+    // Step 2: Find checked assignments for these copies
     const checkedAssignments = await CopyAssignments.findAll({
       where: {
-        CopyBarcode: allCopyBarcodes,
-        IsChecked: true  // Only get checked copies
+        copyid: copyIds,
+        is_checked: true
       },
-      attributes: ['CopyBarcode', 'EvaluatorID', 'AssignedAt', 'CheckedAt'],
+      attributes: ['copyid', 'evaluator_id', 'assigned_at', 'checked_at'],
       raw: true
     });
-    
-    console.log("Checked assignments found:", checkedAssignments.length);
-    
-    // ALSO check CopyEval table for evaluated copies, since that's the definitive source
+
+    // Step 3: Find evaluated copies from CopyEval (definitive source)
     const evaluatedCopies = await CopyEval.findAll({
       where: {
-        copyid: allCopyBarcodes,
+        copyid: copyIds,
         del: false,
         status: {
-          [Op.in]: ['Evaluated', 'Reevaluated'] // Include both statuses
+          [Op.in]: ['Evaluated', 'Reevaluated']
         }
       },
-      attributes: ['copyid', 'eval_id', 'createdat', 'updatedat', 'status', 'obt_mark', 'max_mark'],
+      attributes: ['copyid', 'eval_id', 'created_at', 'updated_at', 'status', 'obt_mark', 'max_mark'],
       raw: true
     });
-    
-    console.log("Evaluated copies found in CopyEval:", evaluatedCopies.length);
-    if (evaluatedCopies.length > 0) {
-      console.log("Sample evaluated copy:", evaluatedCopies[0]);
-    }
-    
+
     // Combine unique copies from both sources
     const uniqueCopyIds = new Set();
     let allCheckedCopies = [];
-    
+
     // Process assignment records first
-    if (checkedAssignments.length > 0) {
-      checkedAssignments.forEach(assignment => {
-        if (!uniqueCopyIds.has(assignment.CopyBarcode)) {
-          uniqueCopyIds.add(assignment.CopyBarcode);
-          allCheckedCopies.push({
-            copyId: assignment.CopyBarcode,
-            evaluatorId: assignment.EvaluatorID,
-            source: 'assignment',
-            assignedAt: assignment.AssignedAt,
-            checkedAt: assignment.CheckedAt
-          });
-        }
-      });
-    }
-    
+    checkedAssignments.forEach(assignment => {
+      if (!uniqueCopyIds.has(assignment.copyid)) {
+        uniqueCopyIds.add(assignment.copyid);
+        allCheckedCopies.push({
+          copyId: assignment.copyid,
+          evaluatorId: assignment.evaluator_id,
+          source: 'assignment',
+          assignedAt: assignment.assigned_at,
+          checkedAt: assignment.checked_at
+        });
+      }
+    });
+
     // Then add evaluated copies that aren't already included
-    if (evaluatedCopies.length > 0) {
-      evaluatedCopies.forEach(evalCopy => {
-        if (!uniqueCopyIds.has(evalCopy.copyid)) {
-          uniqueCopyIds.add(evalCopy.copyid);
-          allCheckedCopies.push({
-            copyId: evalCopy.copyid,
-            evaluatorId: evalCopy.eval_id,
-            source: 'copyeval',
-            evaluatedAt: evalCopy.updatedat,
-            status: evalCopy.status,
-            obtainedMarks: evalCopy.obt_mark,
-            maxMarks: evalCopy.max_mark
-          });
-        }
-      });
-    }
-    
+    evaluatedCopies.forEach(evalCopy => {
+      if (!uniqueCopyIds.has(evalCopy.copyid)) {
+        uniqueCopyIds.add(evalCopy.copyid);
+        allCheckedCopies.push({
+          copyId: evalCopy.copyid,
+          evaluatorId: evalCopy.eval_id,
+          source: 'copyeval',
+          evaluatedAt: evalCopy.updated_at,
+          status: evalCopy.status,
+          obtainedMarks: evalCopy.obt_mark,
+          maxMarks: evalCopy.max_mark
+        });
+      }
+    });
+
     // Get evaluator information for all evaluator IDs
     const evaluatorIds = allCheckedCopies.map(copy => copy.evaluatorId);
     const uniqueEvaluatorIds = [...new Set(evaluatorIds)];
-    
+
     const evaluatorsMap = {};
     if (uniqueEvaluatorIds.length > 0) {
       const evaluatorRecords = await UserLogin.findAll({
-        where: { Uid: uniqueEvaluatorIds },
-        attributes: ['Uid', 'Name'],
+        where: { uid: uniqueEvaluatorIds },
+        attributes: ['uid', 'name'],
         raw: true
       });
-      
+
       evaluatorRecords.forEach(evaluator => {
-        evaluatorsMap[evaluator.Uid] = evaluator.Name;
+        evaluatorsMap[evaluator.uid] = evaluator.name;
       });
     }
-    
+
     // Add evaluator names to the checked copies
     allCheckedCopies = allCheckedCopies.map(copy => ({
       ...copy,
       evaluatorName: evaluatorsMap[copy.evaluatorId] || 'Unknown'
     }));
-    
+
     // Return just the checked copies data
     return {
       checkedCount: allCheckedCopies.length,
@@ -1445,134 +1598,3 @@ export const getCheckedCopiesService = async (packingId) => {
 };
 
 
-
-// export const getCheckedCopiesService = async (packingId) => {
-//   if (!packingId) {
-//     const error = new Error("Packing ID is required");
-//     error.status = 400;
-//     throw error;
-//   }
-
-//   try {
-//     // Step 1: Find all BagIDs for the PackingID
-//     const baggingRecords = await Bagging.findAll({
-//       where: { PackingID: packingId },
-//       attributes: ["BagID"],
-//       raw: true,
-//     });
-
-
-
-//     if (!baggingRecords || baggingRecords.length === 0) {
-//       const error = new Error("No bags found for the given packing ID");
-//       error.status = 404;
-//       throw error;
-//     }
-
-//     const bagIds = baggingRecords.map((record) => record.BagID);
-//     console.log("bagids", bagIds);
-    
-
-//     // Step 2: Find all CopyBarcodes for the BagIDs
-//     const gunningRecords = await CopyGunning.findAll({
-//       where: { BagID: bagIds, IsScanned: 1 },
-//       attributes: ["CopyBarcode", "BagID"],
-//       raw: true,
-//     });
-
-//      console.log("Gunning records found:", gunningRecords.length);
-//     if (gunningRecords.length > 0) {
-//       console.log("Sample gunning record:", gunningRecords[0]);
-//     }
-    
-
-//     if (!gunningRecords || gunningRecords.length === 0) {
-//       return {
-//         packingId,
-//         bagCount: bagIds.length,
-//         totalCopies: 0,
-//         checkedCopies: [],
-//         message: "No copies found for the given bags"
-//       };
-//     }
-
-//     // Get all copy barcodes
-//     const allCopyBarcodes = gunningRecords.map((record) => record.CopyBarcode);
-    
-//     // Find only checked assignments for these copies
-//     const checkedAssignments = await CopyAssignments.findAll({
-//       where: {
-//         CopyBarcode: allCopyBarcodes,
-//         IsChecked: true  // Only get checked copies
-//       },
-//       attributes: ['CopyBarcode', 'EvaluatorID', 'AssignedAt', 'CheckedAt'],
-//       raw: true
-//     });
-    
-//     // Get evaluator information for checked copies
-//     const evaluatorIds = checkedAssignments.map(assignment => assignment.EvaluatorID);
-//     const uniqueEvaluatorIds = [...new Set(evaluatorIds)];
-    
-//     const evaluatorsMap = {};
-//     if (uniqueEvaluatorIds.length > 0) {
-//       const evaluatorRecords = await UserLogin.findAll({
-//         where: { Uid: uniqueEvaluatorIds },
-//         attributes: ['Uid', 'Name'],
-//         raw: true
-//       });
-      
-//       evaluatorRecords.forEach(evaluator => {
-//         evaluatorsMap[evaluator.Uid] = evaluator.Name;
-//       });
-//     }
-    
-//     // Format the checked copies data
-//     const checkedCopies = checkedAssignments.map(assignment => ({
-//       copyId: assignment.CopyBarcode,
-//       evaluatorId: assignment.EvaluatorID,
-//       evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown',
-//       assignedAt: assignment.AssignedAt,
-//       checkedAt: assignment.CheckedAt
-//     }));
-
-//     // Group checked copies by bag
-//     const bagCheckedMap = {};
-//     checkedAssignments.forEach(assignment => {
-//       // Find which bag this copy belongs to
-//       const gunningRecord = gunningRecords.find(record => 
-//         record.CopyBarcode === assignment.CopyBarcode
-//       );
-      
-//       if (gunningRecord) {
-//         const bagId = gunningRecord.BagID;
-//         if (!bagCheckedMap[bagId]) {
-//           bagCheckedMap[bagId] = {
-//             checkedCount: 0,
-//             copies: []
-//           };
-//         }
-        
-//         bagCheckedMap[bagId].checkedCount++;
-//         bagCheckedMap[bagId].copies.push({
-//           copyId: assignment.CopyBarcode,
-//           evaluatorId: assignment.EvaluatorID,
-//           evaluatorName: evaluatorsMap[assignment.EvaluatorID] || 'Unknown'
-//         });
-//       }
-//     });
-    
-//     // Return just the checked copies data
-//     return {
-//       // packingId,
-//       // bagCount: bagIds.length,
-//       // totalCopies: allCopyBarcodes.length,
-//       checkedCount: checkedCopies.length,
-//       checkedCopies,
-//       // bagDetails: bagCheckedMap,
-//       // evaluators: evaluatorsMap
-//     };
-//   } catch (error) {
-//     console.error(`Error in getCheckedCopiesService: ${error.message}`);
-//     throw error;
-//   }
-// };

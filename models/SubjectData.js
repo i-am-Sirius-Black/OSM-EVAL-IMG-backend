@@ -2,18 +2,10 @@ import { DataTypes } from "sequelize";
 
 const defineSubjectData = (sequelize) => {
   const SubjectData = sequelize.define("tbl_subjectdata", {
-    sno: {
+    subjectdata_id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
-    },
-    barcode: {
-      type: DataTypes.STRING(50),
-      allowNull: false
-    },
-    bagid: {
-      type: DataTypes.STRING(50),
-      allowNull: true
     },
     packid: {
       type: DataTypes.STRING(50),
@@ -42,14 +34,6 @@ const defineSubjectData = (sequelize) => {
     PaperCode: {
       type: DataTypes.STRING(50),
       allowNull: true
-    },
-    IsAssigned: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false
-    },
-    IsChecked:{
-      type: DataTypes.BOOLEAN,
-      defaultValue: false
     }
   }, {
     tableName: "tbl_subjectdata",
@@ -57,7 +41,7 @@ const defineSubjectData = (sequelize) => {
     freezeTableName: true,
     timestamps: false
   });
-  
+
   return SubjectData;
 };
 
