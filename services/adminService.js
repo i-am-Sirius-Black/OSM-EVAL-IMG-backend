@@ -415,31 +415,39 @@ export const getEvaluatorsStatusService = async () => {
 
 
 
-/** 
+
+//?v3 updated filtering
+/**
  * Get all Evaluated/checked copies with filtering options
- * @param {Object} filters - Optional filters (course, subject, session, etc.)
+ * @param {Object} filters - Optional filters (course, subject, evaluatorId)
  * @returns {Promise<Array>} Filtered evaluated copies
  */
 export const EvaluatedCopiesService = async (filters = {}) => {
   try {
-    const { evaluatorId } = filters;
+    const { course, subject, evaluatorId } = filters;
     
-    // Simple query to get evaluated copies
+    // Base where clause - get evaluated and reevaluated copies
     const whereClause = {
       [Op.or]: [
         { is_evaluated: true },
         { is_reevaluated: true }
       ]
     };
-    
+
     // Add evaluator filter if provided
     if (evaluatorId) {
       whereClause.current_evaluator_id = evaluatorId;
     }
     
-    // Get all evaluated copies with just the needed fields
-    const evaluatedCopies = await Copy.findAll({
+    // First, get copies that match our criteria
+    const copies = await Copy.findAll({
       where: whereClause,
+      include: [{
+        model: SubjectData,
+        as: 'subjectData',
+        required: false,
+        attributes: ['SubjectID', 'Subject', 'Course']
+      }],
       attributes: [
         'copyid',
         'evaluation_status',
@@ -448,27 +456,179 @@ export const EvaluatedCopiesService = async (filters = {}) => {
         'is_evaluated',
         'is_reevaluated',
         'current_evaluator_id'
-      ],
-      raw: true
+      ]
+    });
+
+    // Apply course and subject filters (these might come from subject data)
+    let filteredCopies = copies;
+    
+    if (course || subject) {
+      filteredCopies = copies.filter(copy => {
+        const subjectData = copy.subjectData || {};
+        const matchesCourse = !course || subjectData.Course === course;
+        const matchesSubject = !subject || subjectData.Subject === subject;
+        return matchesCourse && matchesSubject;
+      });
+    }
+    
+    // Get evaluation details for all copies
+    const copyIds = filteredCopies.map(copy => copy.copyid);
+    
+    // Fetch additional evaluation data
+    let evalDetailsMap = {};
+    if (copyIds.length > 0) {
+      const evalDetails = await CopyEval.findAll({
+        where: { 
+          copyid: copyIds,
+          del: false
+        },
+        attributes: [
+          'copyid', 
+          'eval_id', 
+          'obt_mark', 
+          'max_mark', 
+          'eval_time',
+          'status',
+          'updated_at'
+        ],
+        raw: true
+      });
+      
+      // Create a lookup map for quick access
+      evalDetailsMap = evalDetails.reduce((map, detail) => {
+        map[detail.copyid] = detail;
+        return map;
+      }, {});
+    }
+    
+    // Get evaluator details
+    const evaluatorIds = [...new Set(filteredCopies
+      .map(copy => copy.current_evaluator_id)
+      .filter(id => id))];
+      
+    let evaluatorMap = {};
+    if (evaluatorIds.length > 0) {
+      const evaluators = await UserLogin.findAll({
+        where: { uid: evaluatorIds },
+        attributes: ['uid', 'name', 'email'],
+        raw: true
+      });
+      
+      evaluatorMap = evaluators.reduce((map, evaluator) => {
+        map[evaluator.uid] = {
+          name: evaluator.name,
+          email: evaluator.email
+        };
+        return map;
+      }, {});
+    }
+    
+    // Get unique courses and subjects for filter dropdowns
+    const courses = [...new Set(copies
+      .map(copy => copy.subjectData?.Course)
+      .filter(course => course))];
+      
+    const subjects = [...new Set(copies
+      .map(copy => copy.subjectData?.Subject)
+      .filter(subject => subject))];
+    
+    // Combine all data and format response
+    const formattedCopies = filteredCopies.map(copy => {
+      const evalDetails = evalDetailsMap[copy.copyid] || {};
+      const evaluator = evaluatorMap[copy.current_evaluator_id] || {};
+      const subjectData = copy.subjectData || {};
+      
+      return {
+        copyId: copy.copyid,
+        evaluatorId: copy.current_evaluator_id,
+        evaluatorName: evaluator.name || 'Unknown',
+        status: copy.evaluation_status,
+        isEvaluated: copy.is_evaluated,
+        isReevaluated: copy.is_reevaluated,
+        createdAt: copy.created_at,
+        updatedAt: evalDetails.updated_at || copy.updated_at,
+        obtainedMarks: evalDetails.obt_mark || 0,
+        maxMarks: evalDetails.max_mark || 0,
+        evaluationTime: evalDetails.eval_time || 0,
+        course: subjectData.Course || 'Unknown',
+        subject: subjectData.Subject || 'Unknown',
+        subjectCode: subjectData.SubjectID || 'Unknown'
+      };
     });
     
-    // Map to the desired response format
-    return evaluatedCopies.map(copy => ({
-      copyId: copy.copyid,
-      evaluatorId: copy.current_evaluator_id,
-      status: copy.evaluation_status,
-      isEvaluated: copy.is_evaluated,
-      isReevaluated: copy.is_reevaluated,
-      createdAt: copy.created_at,
-      updatedAt: copy.updated_at
-    }));
-    
+    return {
+      copies: formattedCopies,
+      filters: {
+        courses,
+        subjects,
+        evaluators: Object.keys(evaluatorMap).map(id => ({
+          id,
+          name: evaluatorMap[id].name || id
+        }))
+      }
+    };
   } catch (error) {
     console.error("Error in EvaluatedCopiesService:", error);
     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
   }
 };
 
+
+
+//?v2 minimal data
+// /** 
+//  * Get all Evaluated/checked copies with filtering options
+//  * @param {Object} filters - Optional filters (course, subject, session, etc.)
+//  * @returns {Promise<Array>} Filtered evaluated copies
+//  */
+// export const EvaluatedCopiesService = async (filters = {}) => {
+//   try {
+//     const { evaluatorId } = filters;
+    
+//     const whereClause = {
+//       [Op.or]: [
+//         { is_evaluated: true },
+//         { is_reevaluated: true }
+//       ]
+//     };
+
+//     if (evaluatorId) {
+//       whereClause.current_evaluator_id = evaluatorId;
+//     }
+    
+//     const evaluatedCopies = await Copy.findAll({
+//       where: whereClause,
+//       attributes: [
+//         'copyid',
+//         'evaluation_status',
+//         'created_at',
+//         'updated_at',
+//         'is_evaluated',
+//         'is_reevaluated',
+//         'current_evaluator_id'
+//       ],
+//       raw: true
+//     });
+    
+//     return evaluatedCopies.map(copy => ({
+//       copyId: copy.copyid,
+//       evaluatorId: copy.current_evaluator_id,
+//       status: copy.evaluation_status,
+//       isEvaluated: copy.is_evaluated,
+//       isReevaluated: copy.is_reevaluated,
+//       createdAt: copy.created_at,
+//       updatedAt: copy.updated_at
+//     }));
+    
+//   } catch (error) {
+//     console.error("Error in EvaluatedCopiesService:", error);
+//     throw new Error(`Failed to retrieve evaluated copies: ${error.message}`);
+//   }
+// };
+
+
+
+//?v1 old not working
 // /** 
 //  * Get all Evaluated/checked copies with filtering options
 //  * @param {Object} filters - Optional filters (course, subject, session, etc.)
@@ -936,12 +1096,6 @@ export const unassignSubjectFromEvaluator = async (evaluatorId, subjectCode) => 
 
 //*V2 - single source clean
 
-/**
- * Assign a copy to an evaluator for re-evaluation
- * @param {string} copyId
- * @param {string} assignedEvaluatorId
- * @returns {Promise<Object>} 
- */
 export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId) => {
   let transaction;
   
@@ -964,8 +1118,8 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
     // Check for existing requests (outside transaction)
     const existingRequest = await CopyReevaluation.findOne({
       where: {
-        CopyID: copyId,
-        Status: {
+        copyid: copyId,
+        status: {
           [Op.in]: ['Pending', 'Assigned'] // Active statuses
         }
       }
@@ -980,9 +1134,9 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
     // Verify the evaluator exists (outside transaction)
     const evaluator = await UserLogin.findOne({
       where: {
-        Uid: assignedEvaluatorId,
-        Role: 'evaluator',
-        Active: true
+        uid: assignedEvaluatorId,
+        role: 'evaluator',
+        active: true
       }
     });
 
@@ -1023,15 +1177,14 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
       }
     );
 
-    // Create a new re-evaluation request
+    // Create a new re-evaluation request with correct field names from the model
     const reevaluationRequest = await CopyReevaluation.create({
-      CopyID: copyId,
-      Status: 'Assigned',
-      AssignedEvaluatorID: assignedEvaluatorId,
-      AssignedAt: new Date(),
-      Reason: 'Administrative re-evaluation request',
-      OriginalEvaluatorID: isEvaluated.eval_id,
-      OriginalMarks: isEvaluated.obt_mark
+      copyid: copyId,
+      status: 'Assigned',
+      assigned_evaluator_id: assignedEvaluatorId,
+      assigned_at: new Date(),
+      reason: 'Administrative re-evaluation request',
+      is_checked: false
     }, { transaction });
 
     // Commit the transaction
@@ -1040,13 +1193,11 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
 
     // Prepare response with copy details
     return {
-      requestId: reevaluationRequest.RequestID,
-      copyId: reevaluationRequest.CopyID,
-      evaluatorId: reevaluationRequest.AssignedEvaluatorID,
-      status: reevaluationRequest.Status,
-      assignedAt: reevaluationRequest.AssignedAt,
-      originalMarks: reevaluationRequest.OriginalMarks,
-      originalEvaluatorId: reevaluationRequest.OriginalEvaluatorID,
+      requestId: reevaluationRequest.request_id,
+      copyId: reevaluationRequest.copyid,
+      evaluatorId: reevaluationRequest.assigned_evaluator_id,
+      status: reevaluationRequest.status,
+      assignedAt: reevaluationRequest.assigned_at,
       copyDetails: {
         course: copyRecord.course,
         subjectName: copyRecord.subject_name,
@@ -1070,7 +1221,6 @@ export const assignCopyReevaluationService = async (copyId, assignedEvaluatorId)
     throw error; 
   }
 };
-
 
 
 // /**
@@ -1206,16 +1356,16 @@ export const getAssignedReevaluationsService = async () => {
 
     // Format the data for API response
     return reevaluations.map(request => ({
-      requestId: request.RequestID,
-      copyId: request.CopyID,
-      status: request.Status,
-      reason: request.Reason,
-      evaluatorId: request.AssignedEvaluatorID,
-      assignedAt: request.AssignedAt,
-      submittedAt: request.SubmittedAt,
-      reevaluatedMarks: request.ReevaluatedMarks,
-      remarks: request.Remarks,
-      isChecked: request.IsChecked
+      requestId: request.request_id,
+      copyId: request.copyid,
+      status: request.status,
+      reason: request.reason,
+      evaluatorId: request.assigned_evaluator_id,
+      assignedAt: request.assigned_at,
+      submittedAt: request.submitted_at,
+      reevaluatedMarks: request.reevaluated_marks,
+      remarks: request.remarks,
+      isChecked: request.is_checked
     }));
   } catch (error) {
     console.error('Error in getAssignedReevaluationsService:', error);
@@ -1311,7 +1461,7 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
   }
 
   // Check if email already exists
-  const existingEmailUser = await UserLogin.findOne({ where: { Email: email } });
+  const existingEmailUser = await UserLogin.findOne({ where: { email: email } });
   if (existingEmailUser) {
     const error = new Error("Email is already registered");
     error.status = 409;
@@ -1319,7 +1469,7 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
   }
   
   // Check if phone number already exists
-  const existingPhoneUser = await UserLogin.findOne({ where: { PhoneNumber: phoneNumber } });
+  const existingPhoneUser = await UserLogin.findOne({ where: { phone_number: phoneNumber } });
   if (existingPhoneUser) {
     const error = new Error("Phone number is already registered");
     error.status = 409;
@@ -1330,22 +1480,19 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     // Generate a new unique UID
     const uid = await generateNewUID();
     
-    // Generate a random temporary password (6 characters for better security)
+    // Generate a random temp pass
     const tempPassword = generateRandomPassword(6);
     
-    // Hash the password
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    
-    // Create the new evaluator record
+  
     const newEvaluator = await UserLogin.create({
-      Name: name,
-      Email: email,
-      PhoneNumber: phoneNumber,
-      Uid: uid,
-      Pass: hashedPassword,
-      Role: "evaluator",
-      Active: true,
-      FirstLogin: true // Flag to force password change on first login
+      name: name,
+      email: email,
+      phone_number: phoneNumber,
+      uid: uid,
+      pass: hashedPassword,
+      role: "evaluator",
+      active: true,
     });
     
     // Send credentials via email
@@ -1358,25 +1505,16 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
       // Just log the error and continue
     }
     
-    // Return the user data with the plain text password (for one-time display)
     return {
       success: true,
-      uid: newEvaluator.Uid,
+      uid: newEvaluator.uid,
       password: tempPassword, // Plain text password (only for initial display)
-      name: newEvaluator.Name,
-      email: newEvaluator.Email,
+      name: newEvaluator.name,
+      email: newEvaluator.email,
       emailSent: true
     };
 
-    // //?testing
-    //     return {
-    //   success: true,
-    //   uid: uid,
-    //   password: tempPassword, // Plain text password (only for initial display)
-    //   name: name,
-    //   email: email,
-    //   emailSent: true
-    // };
+
   } catch (error) {
     console.error("Error registering evaluator:", error);
     const serviceError = new Error("Failed to register evaluator");
@@ -1385,26 +1523,6 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     throw serviceError;
   }
 };
-
-
-
-// /**
-//  * Generate a random password of specified length
-//  * @param {number} length - Length of the password to generate
-//  * @returns {string} Random password
-//  */
-// const generateRandomPassword = (length) => {
-//   const charset = "abcdefghijklmnopqrstuvwxyz0123456789";
-//   let password = "";
-  
-//   for (let i = 0; i < length; i++) {
-//     const randomIndex = Math.floor(Math.random() * charset.length);
-//     password += charset[randomIndex];
-//   }
-  
-//   return password;
-// };
-
 
 
 /**
@@ -1598,3 +1716,290 @@ export const getCheckedCopiesService = async (packId) => {
 };
 
 
+
+//** New apis for reevaluation with new str */
+
+/**
+ * Get evaluated copies suitable for reevaluation
+ * @param {Object} filters - Filter options
+ * @returns {Promise<Array>} List of evaluated copies
+ */
+export const getEvaluatedCopiesForReevaluationService = async (filters = {}) => {
+  try {
+    const { subjectCode, examName, evaluatorId, searchQuery } = filters;
+    
+    // Base where clause - must be evaluated and not rejected
+    const whereClause = {
+      is_evaluated: true,
+      is_rejected: false,
+      // Don't include copies already in reevaluation
+      is_re_assigned: false
+    };
+    
+    // Add subject code filter if provided
+    if (subjectCode) {
+      // First find the subjectdata_id for this subject code
+      const subjectData = await SubjectData.findOne({
+        where: { SubjectID: subjectCode },
+        attributes: ['subjectdata_id'],
+        raw: true
+      });
+      
+      if (subjectData) {
+        whereClause.subjectdata_id = subjectData.subjectdata_id;
+      }
+    }
+    
+    // Add evaluator filter if provided
+    if (evaluatorId) {
+      whereClause.current_evaluator_id = evaluatorId;
+    }
+    
+    // Add search by copy ID
+    if (searchQuery) {
+      whereClause.copyid = {
+        [Op.like]: `%${searchQuery}%`
+      };
+    }
+    
+    // Include joins to get subject and evaluator details
+    const copies = await Copy.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: SubjectData,
+          as: 'subjectData',
+          attributes: ['Course', 'Subject', 'SubjectID']
+        }
+      ],
+      limit: 100, // Limit results to avoid performance issues
+      attributes: [
+        'copyid', 
+        'current_evaluator_id', 
+        'evaluation_status', 
+        'is_evaluated',
+        'bag_id',
+        'pack_id',
+        'updated_at'
+      ]
+    });
+    
+    // Get the evaluator details for these copies
+    const evaluatorIds = [...new Set(copies.map(copy => copy.current_evaluator_id).filter(Boolean))];
+    let evaluatorMap = {};
+    
+    if (evaluatorIds.length > 0) {
+      const evaluators = await UserLogin.findAll({
+        where: { uid: evaluatorIds },
+        attributes: ['uid', 'name'],
+        raw: true
+      });
+      
+      evaluatorMap = evaluators.reduce((map, evaluator) => {
+        map[evaluator.uid] = evaluator.name;
+        return map;
+      }, {});
+    }
+    
+    // Get evaluation details from CopyEval for obtained marks
+    const copyIds = copies.map(copy => copy.copyid);
+    let evalDataMap = {};
+    
+    if (copyIds.length > 0) {
+      const evalData = await CopyEval.findAll({
+        where: { 
+          copyid: copyIds,
+          del: false, // Not deleted
+          status: 'Evaluated' // Only evaluated
+        },
+        attributes: ['copyid', 'obt_mark', 'max_mark', 'eval_id'],
+        raw: true
+      });
+      
+      evalDataMap = evalData.reduce((map, evalCopy) => {
+        map[evalCopy.copyid] = {
+          obtainedMarks: evalCopy.obt_mark,
+          maxMarks: evalCopy.max_mark,
+          evaluatorId: evalCopy.eval_id
+        };
+        return map;
+      }, {});
+    }
+    
+    // Format the response
+    return copies.map(copy => {
+      const evalData = evalDataMap[copy.copyid] || {};
+      
+      return {
+        copyId: copy.copyid,
+        evaluatorId: copy.current_evaluator_id,
+        evaluatorName: evaluatorMap[copy.current_evaluator_id] || 'Unknown',
+        evaluationStatus: copy.evaluation_status,
+        isEvaluated: copy.is_evaluated,
+        bagId: copy.bag_id,
+        packId: copy.pack_id,
+        evaluatedAt: copy.updated_at,
+        obtainedMarks: evalData.obtainedMarks,
+        maxMarks: evalData.maxMarks,
+        course: copy.subjectData?.Course || 'Unknown',
+        subject: copy.subjectData?.Subject || 'Unknown',
+        subjectCode: copy.subjectData?.SubjectID || 'Unknown'
+      };
+    });
+    
+  } catch (error) {
+    console.error("Error in getEvaluatedCopiesForReevaluationService:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get copy details by ID
+ * @param {string} copyId - The copy ID to retrieve
+ * @returns {Promise<Object>} Copy details
+ */
+export const getCopyByIdService = async (copyId) => {
+  try {
+    // Find the copy with associated subject data
+    const copy = await Copy.findOne({
+      where: { copyid: copyId },
+      include: [
+        {
+          model: SubjectData,
+          as: 'subjectData',
+          attributes: ['Course', 'Subject', 'SubjectID']
+        }
+      ]
+    });
+    
+    if (!copy) {
+      return null;
+    }
+    
+    // Get evaluation data if it exists
+    const evalData = await CopyEval.findOne({
+      where: { 
+        copyid: copyId,
+        del: false,
+        status: 'Evaluated'
+      },
+      attributes: ['copyid', 'obt_mark', 'max_mark', 'eval_id', 'created_at']
+    });
+    
+    // Get evaluator name
+    let evaluatorName = 'Unknown';
+    if (copy.current_evaluator_id) {
+      const evaluator = await UserLogin.findOne({
+        where: { uid: copy.current_evaluator_id },
+        attributes: ['name'],
+        raw: true
+      });
+      
+      if (evaluator) {
+        evaluatorName = evaluator.name;
+      }
+    }
+    
+    // Return formatted copy details
+    return {
+      copyId: copy.copyid,
+      bagId: copy.bag_id,
+      packId: copy.pack_id,
+      evaluatorId: copy.current_evaluator_id,
+      evaluatorName,
+      evaluationStatus: copy.evaluation_status,
+      isEvaluated: copy.is_evaluated,
+      isRejected: copy.is_rejected,
+      isReassigned: copy.is_re_assigned,
+      course: copy.subjectData?.Course || 'Unknown',
+      subject: copy.subjectData?.Subject || 'Unknown',
+      subjectCode: copy.subjectData?.SubjectID || 'Unknown',
+      obtainedMarks: evalData?.obt_mark,
+      maxMarks: evalData?.max_mark,
+      evaluatedAt: evalData?.created_at || copy.updated_at
+    };
+    
+  } catch (error) {
+    console.error("Error in getCopyByIdService:", error);
+    throw error;
+  }
+};
+
+
+
+
+
+/**
+ * Get evaluation statistics
+ * @param {string} timeRange - Time range for the statistics (all, today, week, month)
+ * @returns {Promise<Object>} - Statistics about evaluations and reevaluations
+ */
+export const getEvaluationStatsService = async (timeRange = 'all') => {
+  try {
+    // Set up date filters based on timeRange
+    const whereClause = {};
+    
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startDate;
+      
+      switch (timeRange) {
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          // Start of the current week (Sunday)
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - now.getDay());
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'month':
+          // Start of the current month
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        whereClause.updated_at = {
+          [Op.gte]: startDate
+        };
+      }
+    }
+    
+    // Get total copies for perspective
+    const totalCopies = await Copy.count();
+    
+    // Count total evaluations (copies that have been evaluated)
+    const totalEvaluations = await Copy.count({
+      where: {
+        is_evaluated: true,
+        ...whereClause
+      }
+    });
+
+    // Count total reevaluation requests
+    const totalReevaluations = await CopyReevaluation.count({
+      ...whereClause
+    });
+    
+    // Count total rejected copies
+    const totalRejected = await Copy.count({
+      where: {
+        is_rejected: true,
+        ...whereClause
+      }
+    });
+    
+    return {
+      totalCopies,
+      totalEvaluations,
+      totalReevaluations,
+      totalRejected
+    };
+  } catch (error) {
+    console.error("Error in getEvaluationStatsService:", error);
+    throw new Error(`Failed to get evaluation statistics: ${error.message}`);
+  }
+};

@@ -27,6 +27,29 @@ export const saveEvaluationAndAnnotations = async (data) => {
 
   const transaction = await sequelize.transaction();
   try {
+    // First check if the copy exists and is not rejected
+    const copyRecord = await Copy.findOne({ 
+      where: { copyid: copyid },
+      transaction 
+    });
+    
+    if (!copyRecord) {
+      await transaction.rollback();
+      return {
+        success: false,
+        message: `Copy with ID ${copyid} not found`,
+      };
+    }
+    
+    // Check if the copy is rejected
+    if (copyRecord.is_rejected) {
+      await transaction.rollback();
+      return {
+        success: false,
+        message: "Cannot evaluate a rejected copy. The copy must be unrejected first.",
+      };
+    }
+
     // Check if CopyEval record already exists
     let evalRecord = await CopyEval.findOne({ where: { copyid }, transaction });
     if (evalRecord) {
@@ -39,7 +62,7 @@ export const saveEvaluationAndAnnotations = async (data) => {
       };
     }
 
-    // Create new CopyEval record (only if it doesn't exist)
+    // Create new CopyEval record
     evalRecord = await CopyEval.create(
       {
         copyid,
@@ -69,7 +92,7 @@ export const saveEvaluationAndAnnotations = async (data) => {
       };
     }
 
-    // Create new CopyAnnotation record (only if it doesn't exist)
+    // Create new CopyAnnotation record
     await CopyAnnotation.create(
       {
         copyid: copyid,
@@ -98,17 +121,15 @@ export const saveEvaluationAndAnnotations = async (data) => {
       );
     }
 
-    // Update the Copy table to mark it as evaluated (single source of truth)
-    await Copy.update(
+    // Update the Copy table to mark it as evaluated
+    await copyRecord.update(
       {
         is_evaluated: true,
+        is_rejected: false, // Ensure it's not marked as rejected
         evaluation_status: status,
         current_evaluator_id: eval_id
       },
-      {
-        where: { copyid: copyid },
-        transaction,
-      }
+      { transaction }
     );
 
     await transaction.commit();
@@ -214,69 +235,155 @@ export const getRejectedCopies = async () => {
  */
 export const rejectCopyRecord = async (rejectData) => {
   const { copyId, reason, userId, bagId, copyStatus } = rejectData;
+  const transaction = await sequelize.transaction();
 
-  // Validate required fields
-  if (!copyId || !reason || !userId || !bagId) {
-    const error = new Error(
-      "Copy ID, reason, user ID, and Bag ID are required"
-    );
-    error.status = 400;
+  try {
+    // Validate required fields
+    if (!copyId || !reason || !userId || !bagId) {
+      throw new Error("Copy ID, reason, user ID, and Bag ID are required");
+    }
+
+    // First check if this copy already has a CopyEval record (evaluated or rejected)
+    const existingRecord = await CopyEval.findOne({ 
+      where: { copyid: copyId },
+      transaction
+    });
+    
+    if (existingRecord) {
+      await transaction.rollback();
+      const error = new Error("A record for this Copy ID already exists");
+      error.status = 409;
+      throw error;
+    }
+
+    // Check if copy exists in Copy table and update it
+    const copyRecord = await Copy.findOne({ 
+      where: { copyid: copyId },
+      transaction 
+    });
+    
+    if (!copyRecord) {
+      await transaction.rollback();
+      const error = new Error(`Copy with ID ${copyId} not found`);
+      error.status = 404;
+      throw error;
+    }
+
+    // Update the Copy table to mark it as rejected
+    await copyRecord.update({
+      is_rejected: true,
+      evaluation_status: 'Rejected',
+      current_evaluator_id: userId
+    }, { transaction });
+
+    // Create a new record in the CopyEval table for the rejected copy
+    const response = await CopyEval.create({
+      copyid: copyId,
+      status: copyStatus || "Rejected",
+      reject_reason: reason,
+      eval_id: userId,
+      bag_id: bagId,
+      del: 1 // Mark as deleted (1)
+    }, { transaction });
+
+    // Update the assignment record if exists
+    const assignment = await CopyAssignments.findOne({
+      where: {
+        copyid: copyId,
+        evaluator_id: userId,
+      },
+      transaction,
+    });
+
+    if (assignment) {
+      await assignment.update(
+        {
+          is_checked: true, // Mark as checked since the evaluator made a decision
+          checked_at: new Date(),
+        },
+        { transaction }
+      );
+    }
+
+    await transaction.commit();
+    return response;
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error in rejectCopyRecord:", error);
     throw error;
   }
-
-  // Check if the copy has already been rejected
-  const existingRecord = await CopyEval.findOne({ where: { copyid: copyId } });
-  if (existingRecord) {
-    const error = new Error("A record for this Copy ID already exists");
-    error.status = 409;
-    throw error;
-  }
-
-  // Create a new record in the CopyEval table for the rejected copy
-  const response = await CopyEval.create({
-    copyid: copyId,
-    status: copyStatus || "Rejected",
-    reject_reason: reason,
-    eval_id: userId,
-    bag_id: bagId,
-    del: 1, // Mark as deleted (1)
-  });
-
-  return response;
 };
 
+
 /**
- * Unreject a previously rejected copy
+ * Unreject a previously rejected copy (deleting old copyassignment)
  * @param {string} copyId - The ID of the copy to unreject
  * @returns {Promise<boolean>} Success status
  */
 export const unrejectCopyRecord = async (copyId) => {
-  // Validate required fields
-  if (!copyId) {
-    const error = new Error("Copy ID is required");
-    error.status = 400;
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Validate required fields
+    if (!copyId) {
+      throw new Error("Copy ID is required");
+    }
+
+    // Find the rejected record in CopyEval
+    const existingRecord = await CopyEval.findOne({
+      where: { 
+        copyid: copyId, 
+        del: true,
+        status: "Rejected"
+      },
+      transaction
+    });
+
+    if (!existingRecord) {
+      await transaction.rollback();
+      const error = new Error("No rejected record found");
+      error.status = 404;
+      throw error;
+    }
+
+    // Find the copy in Copy table
+    const copyRecord = await Copy.findOne({ 
+      where: { copyid: copyId },
+      transaction 
+    });
+    
+    if (!copyRecord) {
+      await transaction.rollback();
+      const error = new Error(`Copy with ID ${copyId} not found`);
+      error.status = 404;
+      throw error;
+    }
+
+    // Update the Copy table to remove rejection flag and make available for assignment
+    await copyRecord.update({
+      is_rejected: false,
+      is_assigned: false, // Make the copy available for new assignments
+      evaluation_status: 'Not-Evaluated',
+      is_evaluated: false
+    }, { transaction });
+
+    // Delete the CopyEval record entirely
+    await existingRecord.destroy({ transaction });
+
+    // DELETE the assignment record entirely rather than updating it
+    // This ensures the copy is completely removed from the original evaluator's queue
+    await CopyAssignments.destroy({
+      where: { copyid: copyId },
+      transaction
+    });
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error in unrejectCopyRecord:", error);
     throw error;
   }
-
-  // Find the rejected record for the given Copy ID
-  const existingRecord = await CopyEval.findOne({
-    where: { copyid: copyId, del: true }, 
-  });
-
-  if (!existingRecord) {
-    const error = new Error("No rejected record found");
-    error.status = 404;
-    throw error;
-  }
-
-  // Update the record to mark it as not deleted (0)
-  await existingRecord.update({
-    status: "Not-Evaluated",
-    reject_reason: "",
-    del: false,
-  });
-
-  return true;
 };
 
 

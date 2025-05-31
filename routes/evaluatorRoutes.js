@@ -1,5 +1,5 @@
 import express from 'express';
-import { assignNewBatch, checkAssignedReeval, checkCopies, completeCopyEvaluation, getAssignedSubjects, getCurrentBatch, startCopyEvaluation, submitReevaluation } from '../controllers/evaluatorController.js';
+import { assignNewBatch, checkAssignedReeval, checkCopies, completeCopyEvaluation, getAssignedSubjects, getCurrentBatch, getReevaluationStatus, startCopyEvaluation, submitReevaluation } from '../controllers/evaluatorController.js';
 import { userProtected } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -22,6 +22,12 @@ router.post('/assign-batch', assignNewBatch);
 
 // Get current active batch for a subject
 router.get('/current-batch/:subjectCode', getCurrentBatch);
+
+// Existing route
+router.get('/check-reeval-assigned', checkAssignedReeval);
+
+// Add new lightweight status endpoint
+router.get('/reevaluations/status', getReevaluationStatus);
 
 //** ........End .............**/
 
@@ -49,7 +55,5 @@ router.get('/check-copies', checkCopies);
 // Submit reevaluated copy (that was assigned to you) 
 router.post('/submit-reevaluation', submitReevaluation);
 
-// Check if a evaluator has been assigned with Reeval Copy
-router.get('/check-reeval-assigned', checkAssignedReeval)
 
 export default router;

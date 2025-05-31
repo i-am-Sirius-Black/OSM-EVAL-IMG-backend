@@ -67,27 +67,30 @@ export const saveEvaluation = async (req, res) => {
   //   }
   // }
   
-  /**
-   * Get all rejected copies
-   */
-  export const getAllRejectedCopies = async (req, res) => {
-    try {
-      const rejectedCopies = await getRejectedCopies();
-      
-      if (!rejectedCopies || rejectedCopies.length === 0) {
-        return res.status(404).json({ message: "No rejected copies found" });
-      }
-  
-      res.status(200).json(rejectedCopies);
-    } catch (error) {
-      console.error("Error fetching rejected copies:", error.message);
-      
-      const statusCode = error.status || 500;
-      res.status(statusCode).json({ 
-        error: error.message || "Failed to fetch rejected copies" 
-      });
-    }
+/**
+ * Get all rejected copies
+ */
+export const getAllRejectedCopies = async (req, res) => {
+  try {
+    const rejectedCopies = await getRejectedCopies();
+    
+    // Return 200 with empty array if no rejected copies found
+    // This makes it easier for frontend to handle the response
+    res.status(200).json({
+      success: true,
+      count: rejectedCopies.length,
+      data: rejectedCopies || []
+    });
+  } catch (error) {
+    console.error("Error fetching rejected copies:", error.message);
+    
+    const statusCode = error.status || 500;
+    res.status(statusCode).json({ 
+      success: false,
+      error: error.message || "Failed to fetch rejected copies" 
+    });
   }
+}
   
   /**
    * Reject a copy

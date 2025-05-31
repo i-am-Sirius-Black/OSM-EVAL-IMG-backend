@@ -1,4 +1,4 @@
-import { checkAvailableCopies, getEvaluatorReevaluationsService, submitReevaluationService } from '../services/evaluatorService.js';
+import { checkAvailableCopies, getEvaluatorReevaluationsService, getReevaluationCountService, submitReevaluationService } from '../services/evaluatorService.js';
 import { 
   getEvaluatorSubjectsService, 
   getCurrentActiveBatchService, 
@@ -253,7 +253,7 @@ export const submitReevaluation = async (req, res) => {
  */
 export const checkAssignedReeval = async(req, res) => {
   const evaluatorId = req.user.uid;
-  console.log("evaluatorId", evaluatorId);
+  console.log("Fetching reevaluation assignments for evaluator:", evaluatorId);
   
   try {
     // Get all reevaluation requests assigned to this evaluator
@@ -275,3 +275,31 @@ export const checkAssignedReeval = async(req, res) => {
   }
 };
 
+
+
+
+
+/**
+ * Get reevaluation status (lightweight endpoint)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getReevaluationStatus = async (req, res) => {
+  const evaluatorId = req.user.uid;
+  
+  try {
+    // Only count the assignments, don't fetch all data
+    const count = await getReevaluationCountService(evaluatorId);
+    
+    return res.status(200).json({
+      hasAssignments: count > 0,
+      count
+    });
+  } catch (error) {
+    console.error("Error checking reevaluation status:", error);
+    return res.status(500).json({ 
+      error: "Failed to check reevaluation status",
+      message: error.message 
+    });
+  }
+};

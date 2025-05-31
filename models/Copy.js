@@ -22,6 +22,10 @@ const defineCopy = (sequelize) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false
       },
+      is_re_assigned: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
       is_evaluated: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
@@ -50,7 +54,7 @@ const defineCopy = (sequelize) => {
         type: DataTypes.STRING(50),
         allowNull: true
       },
-      del:{
+      is_rejected: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
       }

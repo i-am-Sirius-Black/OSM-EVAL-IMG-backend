@@ -6,11 +6,11 @@ const router = express.Router();
 router.use(userProtected) //auth middleware
 
 //** Tested and working Apis */
+router.get('/', getAllCourses); // Get all courses
+router.get('/:courseId/subjects', getAllSubjectsForCourse); // - Get all subjects for a course
 
 //** ........End .............**/
 
 
-router.get('/', getAllCourses); // Get all courses
-router.get('/:courseId/subjects', getAllSubjectsForCourse); // - Get all subjects for a course
 
 export default router;

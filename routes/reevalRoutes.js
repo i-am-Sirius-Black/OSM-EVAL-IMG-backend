@@ -13,7 +13,6 @@ router.use(userProtected);
 
 
 
-router.post('/reevaluate', submitReevaluationController);
-
+router.post('/submit', submitReevaluationController);
 
 export default router;

@@ -5,12 +5,12 @@ import { userProtected } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 //** Tested and working Apis */
-
-//** ........End .............**/
-
 router.get('/check', checkAuth);
 router.post('/login', login);
 router.post('/logout', logout);
+//** ........End .............**/
+
+
 router.put('/change-password',userProtected, changePassword); 
 
 

@@ -1,5 +1,5 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
-import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAllocationStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
+import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getCopyByIdService, getEvaluatedCopiesForReevaluationService, getEvaluationStatsService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAllocationStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
 
 
@@ -281,56 +281,84 @@ export const getEvaluatorsStatus = async (req, res) => {
 
 
 
-/**v2
- * Get evaluated copies with filtering
+/** v3
+ * Get all evaluated/checked copies
+ * @param {Object} req - Express request object with optional query params
+ * @param {Object} res - Express response object
  */
 export const getEvaluatedCopies = async (req, res) => {
   try {
-    // Extract filter parameters from query
-    const { course, subject, session, evaluatorId } = req.query;
-    const filters = { course, subject, session, evaluatorId };
+    // Extract filter parameters from query string
+    const { course, subject, evaluatorId } = req.query;
     
     // Call service with filters
-    const evaluatedCopies = await EvaluatedCopiesService(filters);
-
-    if (!evaluatedCopies || evaluatedCopies.length === 0) {
-      return res.status(200).json({
-        message: "No evaluated copies found",
-        count: 0,
-        copies: []
-      });
-    }
-
-    // Get unique filter options for dropdowns
-    const courses = [...new Set(evaluatedCopies.map(copy => copy.course).filter(Boolean))];
-    const subjects = [...new Set(evaluatedCopies.map(copy => copy.subject).filter(Boolean))];
-    const sessions = [...new Set(evaluatedCopies.map(copy => {
-      if (copy.examDate) {
-        // Extract year from examDate
-        const date = new Date(copy.examDate);
-        return date.getFullYear();
-      }
-      return null;
-    }).filter(Boolean))];
-
-    res.status(200).json({
-      message: "Successfully retrieved evaluated copies",
-      count: evaluatedCopies.length,
-      copies: evaluatedCopies,
-      filters: {
-        courses,
-        subjects,
-        sessions
-      }
+    const result = await EvaluatedCopiesService({ 
+      course, 
+      subject, 
+      evaluatorId 
     });
+    
+    return res.status(200).json(result);
   } catch (error) {
-    console.error("Error fetching evaluated copies:", error.message);
-    res.status(500).json({ 
-      error: "Failed to fetch evaluated copies",
-      message: error.message
+    console.error('Error in getEvaluatedCopies controller:', error);
+    return res.status(500).json({ 
+      error: 'Failed to retrieve evaluated copies',
+      message: error.message 
     });
   }
-}
+};
+
+
+// /**v2
+//  * Get evaluated copies with filtering
+//  */
+// export const getEvaluatedCopies = async (req, res) => {
+//   try {
+//     // Extract filter parameters from query
+//     const { course, subject, session, evaluatorId } = req.query;
+//     const filters = { course, subject, session, evaluatorId };
+    
+//     // Call service with filters
+//     const evaluatedCopies = await EvaluatedCopiesService(filters);
+
+//     if (!evaluatedCopies || evaluatedCopies.length === 0) {
+//       return res.status(200).json({
+//         message: "No evaluated copies found",
+//         count: 0,
+//         copies: []
+//       });
+//     }
+
+//     // Get unique filter options for dropdowns
+//     const courses = [...new Set(evaluatedCopies.map(copy => copy.course).filter(Boolean))];
+//     const subjects = [...new Set(evaluatedCopies.map(copy => copy.subject).filter(Boolean))];
+//     const sessions = [...new Set(evaluatedCopies.map(copy => {
+//       if (copy.examDate) {
+//         // Extract year from examDate
+//         const date = new Date(copy.examDate);
+//         return date.getFullYear();
+//       }
+//       return null;
+//     }).filter(Boolean))];
+
+//     res.status(200).json({
+//       message: "Successfully retrieved evaluated copies",
+//       count: evaluatedCopies.length,
+//       copies: evaluatedCopies,
+//       filters: {
+//         courses,
+//         subjects,
+//         sessions
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error fetching evaluated copies:", error.message);
+//     res.status(500).json({ 
+//       error: "Failed to fetch evaluated copies",
+//       message: error.message
+//     });
+//   }
+// }
 
 
 /**
@@ -577,9 +605,6 @@ export const registerEvaluator = async (req, res) => {
     // Call the service to register the evaluator
     const result = await registerEvaluatorService(name, email, phone);
     
-    // Log the success (but not the password for security)
-    console.log(`Evaluator registered successfully: ${result.name} (${result.uid})`);
-    
     // Return the credentials to the admin
     return res.status(201).json({
       success: true,
@@ -634,6 +659,107 @@ export const getCheckedCopies = async (req, res) => {
     return res.status(error.status || 500).json({
       success: false,
       error: error.message || "Error retrieving checked copies"
+    });
+  }
+};
+
+
+
+
+
+//** New Apis with new str */
+
+/**
+ * Get evaluated copies suitable for reevaluation with optional filtering
+ * @param {Object} req - Express request object with query parameters
+ * @param {Object} res - Express response object
+ */
+export const getEvaluatedCopiesForReevaluation = async (req, res) => {
+  try {
+    // Extract filter parameters from query
+    const { subjectCode, examName, evaluatorId, searchQuery } = req.query;
+    
+    // Call service to get evaluated copies
+    const evaluatedCopies = await getEvaluatedCopiesForReevaluationService({
+      subjectCode,
+      examName,
+      evaluatorId,
+      searchQuery
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: evaluatedCopies.length,
+      data: evaluatedCopies
+    });
+  } catch (error) {
+    console.error("Error fetching evaluated copies for reevaluation:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      error: error.message || "Failed to fetch evaluated copies"
+    });
+  }
+};
+
+/**
+ * Get a specific copy by its ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getCopyById = async (req, res) => {
+  try {
+    const { copyId } = req.params;
+    
+    if (!copyId) {
+      return res.status(400).json({
+        success: false,
+        error: "Copy ID is required"
+      });
+    }
+    
+    const copyDetails = await getCopyByIdService(copyId);
+    
+    if (!copyDetails) {
+      return res.status(404).json({
+        success: false,
+        error: "Copy not found"
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: copyDetails
+    });
+  } catch (error) {
+    console.error("Error fetching copy details:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      error: error.message || "Failed to fetch copy details"
+    });
+  }
+};
+
+
+
+
+
+
+/**
+ * Get evaluation statistics
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getEvaluationStats = async (req, res) => {
+  try {
+    const { timeRange = 'all' } = req.query;
+    const stats = await getEvaluationStatsService(timeRange);
+    
+    return res.status(200).json(stats);
+  } catch (error) {
+    console.error("Error getting evaluation statistics:", error);
+    return res.status(500).json({ 
+      error: "Failed to get evaluation statistics",
+      message: error.message 
     });
   }
 };

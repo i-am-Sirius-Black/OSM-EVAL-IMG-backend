@@ -63,7 +63,7 @@ export const logout = async (req, res) => {
 
 export const changePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const userId = req.user.uid; // Assuming you have the user ID from the token
+  const userId = req.user.uid; 
   console.log("Password change request for user:", userId, "oldPassword:", oldPassword, "newPassword:", newPassword);
   
   if (!oldPassword || !newPassword) {
@@ -71,7 +71,6 @@ export const changePassword = async (req, res) => {
   }
 
   try {
-    // Call the change password service
     await changePasswordService(userId, oldPassword, newPassword);
     return res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {

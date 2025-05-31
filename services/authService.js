@@ -104,6 +104,4 @@ export const changePasswordService = async (uid, oldPassword, newPassword) => {
     serviceError.status = 500;
     throw serviceError;
   }
-
-  // Success - no need to return anything
 };
