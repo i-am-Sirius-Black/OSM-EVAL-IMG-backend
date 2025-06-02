@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { sequelize } from "../config/db.js";
 import {
   Copy,
@@ -518,3 +519,97 @@ export const getEvaluationStatsService = async (evaluatorId) => {
     );
   }
 };
+
+
+
+
+
+
+
+
+
+
+/**
+ * Get the next copy to evaluate in the current batch
+ * @param {string} currentCopyId - The current copy ID
+ * @param {string} evaluatorId - The evaluator's ID
+ * @param {string} subjectCode - The subject code
+ * @returns {Promise<Object>} The next copy or null if no more copies
+ */
+export const getNextCopyInBatchService = async (currentCopyId, evaluatorId, subjectCode) => {
+  try {
+    // Input validation
+    if (!currentCopyId || !evaluatorId) {
+      throw new Error("Copy ID and evaluator ID are required");
+    }
+
+    // 1. First get the batch ID for the current copy
+    const currentAssignment = await CopyAssignments.findOne({
+      where: { 
+        copyid: currentCopyId,
+        evaluator_id: evaluatorId
+      },
+      attributes: ['batch_id'],
+      raw: true
+    });
+
+    if (!currentAssignment || !currentAssignment.batch_id) {
+      console.log(`No batch found for copy ${currentCopyId} and evaluator ${evaluatorId}`);
+      return null;
+    }
+
+    const batchId = currentAssignment.batch_id;
+
+    // 2. Check if the batch is still active
+    const batchInfo = await sequelize.models.tbl_copy_batch_assignments.findOne({
+      where: {
+        batch_id: batchId,
+        evaluator_id: evaluatorId,
+        is_active: true,
+        subject_code: subjectCode
+      },
+      raw: true
+    });
+
+    if (!batchInfo) {
+      console.log(`Batch ${batchId} is not active for evaluator ${evaluatorId}`);
+      return null;
+    }
+
+    // 3. Find the next unchecked copy in the same batch
+    const nextCopy = await CopyAssignments.findOne({
+      where: {
+        batch_id: batchId,
+        evaluator_id: evaluatorId,
+        is_checked: false,
+        copyid: { [Op.ne]: currentCopyId }
+      },
+      attributes: ['copyid'],
+      order: [['assignment_id', 'ASC']], // Get the next copy in sequence
+      raw: true
+    });
+
+    if (!nextCopy) {
+      console.log(`No more copies to evaluate in batch ${batchId} for evaluator ${evaluatorId}`);
+      return null;
+    }
+
+    // Get basic information about the copy
+    const copyInfo = await Copy.findOne({
+      where: { copyid: nextCopy.copyid },
+      attributes: ['copyid', 'evaluation_status'],
+      raw: true
+    });
+
+    return {
+      copyId: nextCopy.copyid,
+      status: copyInfo ? copyInfo.evaluation_status : 'PENDING'
+    };
+  } catch (error) {
+    console.error(`Error in getNextCopyInBatchService: ${error.message}`);
+    throw new Error(`Failed to get next copy: ${error.message}`);
+  }
+};
+
+
+

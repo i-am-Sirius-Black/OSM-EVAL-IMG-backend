@@ -1,6 +1,6 @@
 import express from 'express';
 import { userProtected } from '../middleware/authMiddleware.js';
-import { getAllRejectedCopies, getCopiesToEvaluate, getEvaluationStats, getQuestionsByPaperId, rejectCopy, saveEvaluation, unrejectCopy } from '../controllers/evaluationController.js';
+import { getAllRejectedCopies, getCopiesToEvaluate, getEvaluationStats, getNextCopyInBatch, getQuestionsByPaperId, rejectCopy, saveEvaluation, unrejectCopy } from '../controllers/evaluationController.js';
 
 const router = express.Router();
 router.use(userProtected) //auth middleware
@@ -14,6 +14,9 @@ router.post('/reject', rejectCopy); // - Reject a copy
 router.post('/unreject', unrejectCopy); //  - Unreject a copy
 //** ........End .............**/
 
+
+//* new api */
+router.get('/next-copy/:copyId', getNextCopyInBatch); // - Get next copy in batch by copy ID
 
 // router.post('/', userProtected, saveEvaluation); //* - Save evaluation record
 

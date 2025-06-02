@@ -27,7 +27,6 @@ export const getEvaluatorSubjectsService = async (evaluatorId) => {
       raw: true,
     });
 
-    console.log("Subjects assigned to evaluator:", subjects);
     
 
     // Get all active batch assignments for this evaluator
@@ -125,7 +124,9 @@ export const getCurrentActiveBatchService = async (
 };
 
 
-/**
+
+
+/** v2 (fixing-> reactivation_count probmlem, need to be tested).
  * Assigns a new batch of unassigned copies to an evaluator for a specific subject and exam.
  * * Enhancements over previous version:
  * - Adds support for tracking batch reuse via `reactivation_count`.
@@ -137,7 +138,10 @@ export const assignNewBatchService = async (
   examName,
   batchSize = 10
 ) => {
-  console.log("Assigning new batch for evaluator:", evaluatorId, "subjectCode:", subjectCode, "examName:", examName, "batchSize:", batchSize);
+  console.log(`Assigning new batch to evaluator ${evaluatorId} for ${subjectCode} (${examName})`);
+
+  // Reset any expired copies batch before proceeding
+  await resetExpiredBatchesService();
   
   let transaction;
   try {
@@ -240,11 +244,26 @@ export const assignNewBatchService = async (
     let reactivationCount = 0;
 
     if (newBatch) {
+      // Make sure we get the current reactivation_count
+      const currentReactivationCount = newBatch.reactivation_count || 0;
+      
       // Reactivate and update old batch
       batchReused = true;
-      reactivationCount = newBatch.reactivation_count + 1;
+      reactivationCount = currentReactivationCount + 1;
       
       console.log("Reusing existing batch ID:", newBatch.batch_id);
+      console.log("Previous reactivation count:", currentReactivationCount);
+      console.log("New reactivation count:", reactivationCount);
+      
+      // First, check if there are any existing assignments for this batch
+      // and delete them to ensure a clean slate
+      await CopyAssignments.destroy({
+        where: { 
+          batch_id: newBatch.batch_id 
+        },
+        transaction,
+      });
+      
       await newBatch.update({
         assigned_at: now,
         expires_at: expiresAt,
@@ -334,6 +353,218 @@ export const assignNewBatchService = async (
     throw error;
   }
 };
+
+// /**
+//  * Assigns a new batch of unassigned copies to an evaluator for a specific subject and exam.
+//  * * Enhancements over previous version:
+//  * - Adds support for tracking batch reuse via `reactivation_count`.
+//  * - Maintains previous logic integrity while improving traceability and auditability.
+//  */
+// export const assignNewBatchService = async (
+//   evaluatorId,
+//   subjectCode,
+//   examName,
+//   batchSize = 10
+// ) => {
+
+//   // Reset any expired copies batch before proceeding
+//    await resetExpiredBatchesService();
+  
+//   let transaction;
+//   try {
+//     transaction = await sequelize.transaction();
+
+//     // Check if the subject is assigned to this evaluator
+//     const subjectAssignment = await SubjectAssignment.findOne({
+//       where: {
+//         evaluator_id: evaluatorId,
+//         subject_code: subjectCode,
+//         exam_name: examName,
+//         active: true,
+//       },
+//       transaction,
+//     });
+
+//     if (!subjectAssignment) {
+//       await transaction.rollback();
+//       throw new Error(
+//         `Subject ${subjectCode} for exam ${examName} is not assigned to evaluator ${evaluatorId}`
+//       );
+//     }
+
+//     // Check if evaluator already has an active batch for this subject
+//     const activeBatch = await CopyBatchAssignment.findOne({
+//       where: {
+//         evaluator_id: evaluatorId,
+//         subject_code: subjectCode,
+//         is_active: true,
+//         expires_at: {
+//           [Op.gt]: new Date(),
+//         },
+//       },
+//       transaction,
+//     });
+
+//     if (activeBatch) {
+//       await transaction.commit();
+//       const currentBatch = await getCurrentActiveBatchService(evaluatorId, subjectCode);
+//       return {
+//         message: `You already have an active batch for subject ${subjectCode}. Please complete it before requesting a new one.`,
+//         ...currentBatch,
+//       };
+//     }
+
+//     // Find subjectdata_id for the given subjectCode
+//     const subjectData = await SubjectData.findOne({
+//       where: { SubjectID: subjectCode },
+//       attributes: ['subjectdata_id'],
+//       raw: true,
+//       transaction,
+//     });
+    
+//     if (!subjectData) {
+//       await transaction.rollback();
+//       throw new Error(`No subject found with code ${subjectCode}`);
+//     }
+
+//     console.log("Subject Data ID for subjectCode:", subjectData.subjectdata_id);
+    
+//     // Find unassigned and unchecked copies from Copy table
+//     const unassignedCopies = await Copy.findAll({
+//       where: {
+//         subjectdata_id: subjectData.subjectdata_id,
+//         is_assigned: false,
+//         is_evaluated: false,
+//         is_rejected: false,
+//       },
+//       limit: batchSize,
+//       attributes: ["copyid", "bag_id", "pack_id"],
+//       transaction,
+//     });
+
+//     if (!unassignedCopies || unassignedCopies.length === 0) {
+//       await transaction.rollback();
+//       throw new Error(
+//         `No unassigned copies available for subject ${subjectCode}`
+//       );
+//     }
+
+//     // Create a new batch assignment or reuse an existing inactive one
+//     const now = new Date();
+//     const expiresAt = new Date(now.getTime() + COPY_BATCH_EXPIRY);
+//     console.log("date now:", now);
+//     console.log("Batch expires at:", expiresAt);
+    
+//     // Look for an existing inactive batch that can be reused
+//     let newBatch = await CopyBatchAssignment.findOne({
+//       where: {
+//         evaluator_id: evaluatorId,
+//         subject_code: subjectCode,
+//         exam_name: examName,
+//         is_active: false,
+//       },
+//       order: [["batch_id", "DESC"]], // pick the latest one if multiple
+//       transaction,
+//     });
+
+//     let batchReused = false;
+//     let reactivationCount = 0;
+
+//     if (newBatch) {
+//       // Reactivate and update old batch
+//       batchReused = true;
+//       reactivationCount = newBatch.reactivation_count + 1;
+      
+//       console.log("Reusing existing batch ID:", newBatch.batch_id);
+//       await newBatch.update({
+//         assigned_at: now,
+//         expires_at: expiresAt,
+//         is_active: true,
+//         completed_at: null, // Reset completed_at since we're reactivating
+//         reactivation_count: reactivationCount
+//       }, { transaction });
+//     } else {
+//       // No previous batch found, create a new one
+//       console.log("Creating new batch");
+//       newBatch = await CopyBatchAssignment.create(
+//         {
+//           evaluator_id: evaluatorId,
+//           subject_code: subjectCode,
+//           exam_name: examName,
+//           assigned_at: now,
+//           expires_at: expiresAt,
+//           is_active: true,
+//           reactivation_count: 0
+//         },
+//         { transaction }
+//       );
+//     }
+
+//     // Create individual copy assignments
+//     const copyAssignments = unassignedCopies.map((copy) => ({
+//       copyid: copy.copyid,
+//       evaluator_id: evaluatorId,
+//       batch_id: newBatch.batch_id,
+//       assigned_by: "SYSTEM",
+//       assigned_at: now,
+//       is_checked: false,
+//     }));
+
+//     const createdAssignments = await CopyAssignments.bulkCreate(
+//       copyAssignments,
+//       {
+//         transaction,
+//         fields: [
+//           "copyid",
+//           "evaluator_id",
+//           "batch_id",
+//           "assigned_by",
+//           "assigned_at",
+//           "is_checked"
+//         ]
+//       }
+//     );
+
+//     // Mark the copies as assigned in Copy table
+//     await Copy.update(
+//       { is_assigned: true },
+//       {
+//         where: { copyid: unassignedCopies.map((copy) => copy.copyid) },
+//         transaction,
+//       }
+//     );
+
+//     await transaction.commit();
+
+//     return {
+//       message: `Successfully assigned ${createdAssignments.length} copies`,
+//       batchId: newBatch.batch_id,
+//       subjectCode,
+//       examName,
+//       assignedAt: newBatch.assigned_at,
+//       expiresAt: newBatch.expires_at,
+//       batchReused, // Flag indicating if this batch was reused
+//       reactivationCount, // Number of times this batch has been reactivated
+//       copies: createdAssignments.map((assignment, idx) => ({
+//         assignmentId: assignment.assignment_id,
+//         copyId: assignment.copyid,
+//         bagId: unassignedCopies[idx].bag_id,
+//         packId: unassignedCopies[idx].pack_id,
+//         assignedAt: assignment.assigned_at,
+//       })),
+//     };
+//   } catch (error) {
+//     if (transaction && !transaction.finished) {
+//       try {
+//         await transaction.rollback();
+//       } catch (rollbackError) {
+//         console.error("Error rolling back transaction:", rollbackError);
+//       }
+//     }
+//     console.error("Error in assignNewBatchService:", error);
+//     throw error;
+//   }
+// };
 
 /**
  * Mark a copy as started for evaluation
@@ -526,12 +757,12 @@ export const resetExpiredBatchesService = async () => {
       await Copy.update(
         { is_assigned: false },
         {
-          where: { copyid: expiredCopyIds , is_rejected: false },
+          where: { copyid: expiredCopyIds, is_rejected: false },
           transaction,
         }
       );
 
-      // Delete the assignments
+      // Delete the unchecked assignments
       await CopyAssignments.destroy({
         where: {
           batch_id: {
@@ -542,6 +773,18 @@ export const resetExpiredBatchesService = async () => {
         transaction,
       });
     }
+
+    // IMPORTANT ADDITION: Also delete checked assignments from expired batches
+    // This ensures that when reactivating a batch, there are no leftover checked copies
+    await CopyAssignments.destroy({
+      where: {
+        batch_id: {
+          [Op.in]: expiredBatchIds,
+        },
+        is_checked: true,
+      },
+      transaction,
+    });
 
     await transaction.commit();
 

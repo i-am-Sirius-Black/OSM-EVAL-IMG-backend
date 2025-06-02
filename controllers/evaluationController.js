@@ -6,6 +6,7 @@ import {
     getCopiesToEvaluateService,
     getEvaluationStatsService,
     saveEvaluationAndAnnotations,
+    getNextCopyInBatchService,
   } from '../services/evaluationService.js';
   
   // /**updated v2
@@ -261,3 +262,53 @@ export const getEvaluationStats = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch evaluation statistics" });
   }
 }
+
+
+
+
+
+
+
+/**
+ * Get the next copy to evaluate in the current batch
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with next copy info
+ */
+export const getNextCopyInBatch = async (req, res) => {
+  try {
+    const { copyId } = req.params;
+    const { subjectCode } = req.query;
+    const evaluatorId = req.user.uid; // Assuming authentication middleware adds user to req
+
+    if (!copyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Copy ID is required"
+      });
+    }
+
+    const nextCopy = await getNextCopyInBatchService(copyId, evaluatorId, subjectCode);
+
+    if (!nextCopy) {
+      return res.status(200).json({
+        success: true,
+        message: "No more copies to evaluate in this batch",
+        nextCopy: null
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Next copy found",
+      nextCopy
+    });
+  } catch (error) {
+    console.error("Error getting next copy:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get next copy",
+      error: error.message
+    });
+  }
+};
