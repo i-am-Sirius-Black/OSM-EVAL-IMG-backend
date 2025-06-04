@@ -1,6 +1,8 @@
 import express from 'express';
-import { activateEvaluator, adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, deactivateEvaluator, getAssignedReevaluations, getCheckedCopies, getCopyById, getEvaluatedCopies, getEvaluatedCopiesForReevaluation, getEvaluationStats, getEvaluators, getEvaluatorsStatus, getSubjectAllocationStatus, getSubjectAssignments, registerEvaluator, unassignSubject } from '../controllers/adminController.js';
+import { activateEvaluator, adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, deactivateEvaluator, deleteFragmentation, getAssignedReevaluations, getCheckedCopies, getCopyById, getEvaluatedCopies, getEvaluatedCopiesForReevaluation, getEvaluationStats, getEvaluators, getEvaluatorsStatus, getSubjectAllocationStatus, getSubjectAssignments, registerEvaluator, unassignSubject, updateFragmentation } from '../controllers/adminController.js';
 import { adminProtected } from '../middleware/authMiddleware.js';
+import { createExamPaperController, createFragmentation, createPaper, deletePaperController, getAllSubjects, getPaper, getPaperForFragmentationController, getPapers, getSubjectPapers, servePaperFile, upload, uploadQuestionPaper } from '../controllers/questionPaperController.js';
+import { getPaperWithQuestions } from '../services/questionPaperService.js';
 
 const router = express.Router();
 
@@ -11,6 +13,11 @@ const router = express.Router();
 router.get('/check', checkAdminAuth);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
+
+
+router.get('/papers/:paperId', getPaper);
+router.get('/papers/:paperId/file', servePaperFile);
+
 
 
 
@@ -31,6 +38,39 @@ router.get('/reevaluation-assignments', getAssignedReevaluations);
 router.get('/stats/evaluation', getEvaluationStats);
 router.get('/get-evaluated-copies', getEvaluatedCopies); //- Get all evaluated copies
 //** ........End .............**/
+
+
+// Subject and course data
+router.get('/subjects', getAllSubjects);
+
+
+//** Question paper management(new) */ 
+// Upload paper routes
+router.post('/upload-question-paper', upload.single('file'), uploadQuestionPaper);
+router.post('/create-paper', createPaper);
+
+// Fragmentation routes
+router.get('/papers', getPapers);
+router.get('/papers/:paperId', getPaperForFragmentationController);
+router.post('/create-fragmentation', createFragmentation);
+
+
+
+//** fragmentation management(new) */
+router.get('/papers/:paperId/questions', getPaperWithQuestions);
+router.put('/papers/:paperId/fragmentation', updateFragmentation);
+router.delete('/papers/:paperId/fragmentation', deleteFragmentation);
+
+
+
+
+// Question paper management(old)
+router.post('/upload-question-paper', upload.single('file'), uploadQuestionPaper);
+router.post('/create-paper', createExamPaperController);
+router.get('/papers/subject/:subjectId', getSubjectPapers);
+router.delete('/papers/:paperId', deletePaperController);
+
+
 
 
 // Evaluation statistics endpoint

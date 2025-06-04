@@ -1,6 +1,7 @@
 import { COOKIE_MAX_AGE, JWT_SECRET } from "../config/config.js";
 import { activateEvaluatorService, adminLoginService, assignCopiesToEvaluator, assignCopyReevaluationService, assignSubjectToEvaluator, deactivateEvaluatorService, EvaluatedCopiesService, getAssignedReevaluationsService, getCheckedCopiesService, getCopyByIdService, getEvaluatedCopiesForReevaluationService, getEvaluationStatsService, getEvaluatorsService, getEvaluatorsStatusService, getSubjectAllocationStatusService, getSubjectAssignmentsService, registerEvaluatorService, unassignSubjectFromEvaluator } from "../services/adminService.js";
 import jwt from "jsonwebtoken";
+import { deletePaperFragmentation, getPaperWithQuestionsService, updatePaperFragmentation } from "../services/questionPaperService.js";
 
 
 export const checkAdminAuth = (req, res) => {
@@ -760,6 +761,87 @@ export const getEvaluationStats = async (req, res) => {
     return res.status(500).json({ 
       error: "Failed to get evaluation statistics",
       message: error.message 
+    });
+  }
+};
+
+
+
+
+//** New controllers to manage fragmentation */
+
+
+/**
+ * Get paper with its questions
+ */
+export const getPaperWithQuestions = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    
+    // Use service function
+    const paper = await getPaperWithQuestionsService(paperId);
+    
+    return res.status(200).json(paper);
+  } catch (error) {
+    console.error('Error fetching paper with questions:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ 
+      message: error.message || 'Failed to fetch paper details', 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Update paper fragmentation
+ */
+export const updateFragmentation = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const { questions } = req.body;
+
+    // Validate required fields
+    if (!paperId || !questions) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Use service function
+    await updatePaperFragmentation(paperId, questions);
+    
+    return res.status(200).json({
+      message: 'Fragmentation updated successfully',
+      paperId
+    });
+  } catch (error) {
+    console.error('Error updating fragmentation:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ 
+      message: error.message || 'Failed to update fragmentation', 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Delete paper fragmentation
+ */
+export const deleteFragmentation = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+
+    // Use service function
+    await deletePaperFragmentation(paperId);
+    
+    return res.status(200).json({
+      message: 'Fragmentation deleted successfully',
+      paperId
+    });
+  } catch (error) {
+    console.error('Error deleting fragmentation:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ 
+      message: error.message || 'Failed to delete fragmentation', 
+      error: error.message 
     });
   }
 };

@@ -11,7 +11,7 @@ import defineSubjectAssignment from './SubjectAssignments.js';
 import defineSubjectData from './SubjectData.js';
 import defineReevaluationRequest from './CopyReevaluation.js';
 import defineCopy from './Copy.js';
-
+import defineExamPapers from './ExamPapers.js';
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
 export const CopyEval = defineCopyEval(sequelize);
@@ -25,8 +25,7 @@ export const SubjectData =  defineSubjectData(sequelize);
 export const CopyReevaluation = defineReevaluationRequest(sequelize);
 export const Copy = defineCopy(sequelize);
 export const Scanning = defineScanning(sequelize);
-
-
+export const ExamPapers = defineExamPapers(sequelize);
 
 export const setupAssociations = () => {
   // tbl_copies <-> tbl_subjectdata (Many copies belong to one subjectdata)
@@ -124,6 +123,16 @@ export const setupAssociations = () => {
     sourceKey: 'uid',
     as: 'subjectAssignments'
   });
+
+// Associate ExamPapers with SubjectData
+ExamPapers.belongsTo(SubjectData, {
+  foreignKey: 'subject_id',
+  targetKey: 'SubjectID',
+  as: 'subject'
+});
+
+
+
 
   // If you want to link tbl_copies to tbl_bag (bag_id)
   // Copy.belongsTo(Bag, {
