@@ -1,9 +1,7 @@
 import express from 'express';
-import { activateEvaluator, adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, deactivateEvaluator, deleteFragmentation, getAssignedReevaluations, getCheckedCopies, getCopyById, getEvaluatedCopies, getEvaluatedCopiesForReevaluation, getEvaluationStats, getEvaluators, getEvaluatorsStatus, getSubjectAllocationStatus, getSubjectAssignments, registerEvaluator, unassignSubject, updateFragmentation } from '../controllers/adminController.js';
+import { activateEvaluator, adminLogin, adminLogout, assignCopies, assignCopyReevaluation, assignSubject, checkAdminAuth, deactivateEvaluator, getAssignedReevaluations, getCheckedCopies, getCopyById, getEvaluatedCopies, getEvaluatedCopiesForReevaluation, getEvaluationStats, getEvaluators, getEvaluatorsStatus, getSubjectAllocationStatus, getSubjectAssignments, registerEvaluator, unassignSubject,} from '../controllers/adminController.js';
 import { adminProtected } from '../middleware/authMiddleware.js';
-import { createExamPaperController, createFragmentation, createPaper, deletePaperController, getAllSubjects, getPaper, getPaperForFragmentationController, getPapers, getSubjectPapers, servePaperFile, upload, uploadQuestionPaper } from '../controllers/questionPaperController.js';
-import { getPaperWithQuestions } from '../services/questionPaperService.js';
-
+import { createExamPaperController, createFragmentation, createPaper, deletePaperController, getAllSubjects, getPaper, getPaperForFragmentationController, getPapers, getSubjectPapers, servePaperFile, upload, uploadQuestionPaper, deleteFragmentation, updateFragmentation, getPaperWithQuestionsForEdit  } from '../controllers/questionPaperController.js';
 const router = express.Router();
 
 //** Tested and working Apis */
@@ -57,7 +55,7 @@ router.post('/create-fragmentation', createFragmentation);
 
 
 //** fragmentation management(new) */
-router.get('/papers/:paperId/questions', getPaperWithQuestions);
+router.get('/papers/:paperId/questions', getPaperWithQuestionsForEdit);
 router.put('/papers/:paperId/fragmentation', updateFragmentation);
 router.delete('/papers/:paperId/fragmentation', deleteFragmentation);
 

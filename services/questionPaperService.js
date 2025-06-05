@@ -315,6 +315,8 @@ export const getAllPapers = async (filterUnfragmented = false) => {
     let whereClause = {};
     if (filterUnfragmented) {
       whereClause.fragmentation = false;
+    } else {
+      whereClause.fragmentation = true;
     }
     
     const papers = await ExamPapers.findAll({
@@ -323,7 +325,7 @@ export const getAllPapers = async (filterUnfragmented = false) => {
         {
           model: SubjectData,
           as: 'subject',
-          attributes: ['Subject']
+          attributes: ['Subject', 'Course'] // Include Course for filtering
         }
       ],
       order: [['created_at', 'DESC']]
@@ -333,6 +335,8 @@ export const getAllPapers = async (filterUnfragmented = false) => {
       paperId: paper.paper_id,
       paperCode: paper.paper_code,
       subject: paper.subject?.Subject || 'Unknown',
+      courseId: paper.subject?.Course, // Add course ID for filtering
+      courseName: paper.subject?.Course, // Same value for display
       maxMarks: paper.max_marks,
       hasFragmentation: paper.fragmentation
     }));
@@ -428,17 +432,13 @@ export const getPaperForFragmentation = async (paperId) => {
  */
 export const getPaperWithQuestionsService = async (paperId) => {
   try {
+    // First get the paper without eager loading questions
     const paper = await ExamPapers.findByPk(paperId, {
       include: [
         {
           model: SubjectData,
           as: 'subject',
-          attributes: ['subject']
-        },
-        {
-          model: Questions,
-          as: 'questions',
-          attributes: ['question_id', 'q_no', 'max_mark'],
+          attributes: ['subject', 'Course'] // Add Course to the attributes
         }
       ]
     });
@@ -449,17 +449,26 @@ export const getPaperWithQuestionsService = async (paperId) => {
       throw error;
     }
 
+    // Now get questions separately
+    const questions = await Questions.findAll({
+      where: { paper_id: paperId },
+      attributes: ['sno', 'q_no', 'max_mark'],
+      order: [['q_no', 'ASC']]
+    });
+
     // Format the response
     return {
       paperId: paper.paper_id,
       paperCode: paper.paper_code,
       subject: paper.subject?.subject || 'Unknown',
+      courseId: paper.subject?.Course, // Add courseId to the response
+      courseName: paper.subject?.Course, // We'll use the same field for name and ID
       maxMarks: paper.max_marks,
       title: paper.title,
       filePath: paper.file_path,
       hasFragmentation: paper.fragmentation,
-      questions: paper.questions.map(q => ({
-        questionId: q.question_id,
+      questions: questions.map(q => ({
+        questionId: q.sno,
         questionNumber: q.q_no,
         maxMarks: q.max_mark
       }))

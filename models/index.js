@@ -131,6 +131,15 @@ ExamPapers.belongsTo(SubjectData, {
   as: 'subject'
 });
 
+ExamPapers.hasMany(Questions, {
+  foreignKey: 'paper_id',
+  as: 'questions'
+});
+
+Questions.belongsTo(ExamPapers, {
+  foreignKey: 'paper_id',
+  as: 'paper'
+});
 
 
 
