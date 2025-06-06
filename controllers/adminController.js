@@ -591,11 +591,22 @@ export const getAssignedReevaluations = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
+
+
+// Update the registerEvaluator function
 export const registerEvaluator = async (req, res) => {
-  const { name, email, phone } = req.body;
+  const { 
+    name, 
+    email, 
+    phone, 
+    aadhaarNumber, 
+    address, 
+    instituteName, 
+    instituteCode, 
+    facultyId 
+  } = req.body;
   
   try {
-    // Make sure the request is coming from an admin
     if (req.user?.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -603,15 +614,24 @@ export const registerEvaluator = async (req, res) => {
       });
     }
     
-    // Call the service to register the evaluator
-    const result = await registerEvaluatorService(name, email, phone);
+    // Call the service to register the evaluator with all fields
+    const result = await registerEvaluatorService(
+      name, 
+      email, 
+      phone, 
+      aadhaarNumber, 
+      address, 
+      instituteName, 
+      instituteCode, 
+      facultyId
+    );
     
     // Return the credentials to the admin
     return res.status(201).json({
       success: true,
       message: "Evaluator registered successfully",
       uid: result.uid,
-      password: result.password,
+      // password: result.password,
       name: result.name,
       email: result.email
     });
@@ -626,6 +646,43 @@ export const registerEvaluator = async (req, res) => {
     });
   }
 };
+
+
+// export const registerEvaluator = async (req, res) => {
+//   const { name, email, phone } = req.body;
+  
+//   try {
+//     // Make sure the request is coming from an admin
+//     if (req.user?.role !== 'admin') {
+//       return res.status(403).json({
+//         success: false,
+//         error: "Not authorized to register evaluators"
+//       });
+//     }
+    
+//     // Call the service to register the evaluator
+//     const result = await registerEvaluatorService(name, email, phone);
+    
+//     // Return the credentials to the admin
+//     return res.status(201).json({
+//       success: true,
+//       message: "Evaluator registered successfully",
+//       uid: result.uid,
+//       password: result.password,
+//       name: result.name,
+//       email: result.email
+//     });
+//   } catch (error) {
+//     console.error("Error in registerEvaluator controller:", error);
+    
+//     // Return appropriate error based on status code
+//     const statusCode = error.status || 500;
+//     return res.status(statusCode).json({
+//       success: false,
+//       error: error.message || "Failed to register evaluator"
+//     });
+//   }
+// };
 
 
 //** Get Checked Copies */

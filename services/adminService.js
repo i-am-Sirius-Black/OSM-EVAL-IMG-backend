@@ -1,4 +1,4 @@
-import { Copy, CopyAssignments, CopyBatchAssignment, CopyEval, CopyReevaluation, SubjectAssignment, SubjectData, UserLogin } from "../models/index.js";
+import { Copy, CopyAssignments, CopyBatchAssignment, CopyEval, CopyReevaluation, SubjectAssignment, SubjectData, UserProfile, UserLogin } from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, TOKEN_EXPIRY } from "../config/config.js";
@@ -1447,13 +1447,10 @@ export const getAssignedReevaluationsService = async () => {
 // };
 
 
-
-
-
-
-// Update your existing function
-export const registerEvaluatorService = async (name, email, phoneNumber) => {
-  // Validate input
+//?v2 Updated registerEvaluatorService function
+// Update the registerEvaluatorService function
+export const registerEvaluatorService = async (name, email, phoneNumber, aadhaarNumber, address, instituteName, instituteCode, facultyId) => {
+  // Validate input for essential fields
   if (!name || !email || !phoneNumber) {
     const error = new Error("Name, email and phone number are required");
     error.status = 400;
@@ -1476,6 +1473,20 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     throw error;
   }
 
+  // Check if Aadhaar number already exists (if provided)
+  if (aadhaarNumber) {
+    // Use UserProfile model to check aadhaar
+    const existingAadhaarUser = await UserProfile.findOne({ where: { adhaar_number: aadhaarNumber } });
+    if (existingAadhaarUser) {
+      const error = new Error("Aadhaar number is already registered");
+      error.status = 409;
+      throw error;
+    }
+  }
+
+  // Use a transaction to ensure both tables are updated together
+  const transaction = await sequelize.transaction();
+
   try {
     // Generate a new unique UID
     const uid = await generateNewUID();
@@ -1485,6 +1496,7 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
   
+    // 1. Create the user in UserLogin table
     const newEvaluator = await UserLogin.create({
       name: name,
       email: email,
@@ -1493,7 +1505,21 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
       pass: hashedPassword,
       role: "evaluator",
       active: true,
-    });
+    }, { transaction });
+    
+    // 2. Create additional details in UserProfile table
+    await UserProfile.create({
+      uid: uid,
+      adhaar_number: aadhaarNumber,
+      address: address,
+      institute_name: instituteName,
+      institute_code: instituteCode,
+      faculty_id: facultyId,
+      phone_number: phoneNumber // Store phone number in both tables for now
+    }, { transaction });
+
+    // Commit the transaction
+    await transaction.commit();
     
     // Send credentials via email
     try {
@@ -1508,14 +1534,15 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     return {
       success: true,
       uid: newEvaluator.uid,
-      password: tempPassword, // Plain text password (only for initial display)
+      // password: tempPassword, // Plain text password (only for initial display)
       name: newEvaluator.name,
       email: newEvaluator.email,
       emailSent: true
     };
 
-
   } catch (error) {
+    // Rollback the transaction if any error occurs
+    await transaction.rollback();
     console.error("Error registering evaluator:", error);
     const serviceError = new Error("Failed to register evaluator");
     serviceError.status = 500;
@@ -1523,6 +1550,81 @@ export const registerEvaluatorService = async (name, email, phoneNumber) => {
     throw serviceError;
   }
 };
+
+
+
+// // Update your existing function
+// export const registerEvaluatorService = async (name, email, phoneNumber) => {
+//   // Validate input
+//   if (!name || !email || !phoneNumber) {
+//     const error = new Error("Name, email and phone number are required");
+//     error.status = 400;
+//     throw error;
+//   }
+
+//   // Check if email already exists
+//   const existingEmailUser = await UserLogin.findOne({ where: { email: email } });
+//   if (existingEmailUser) {
+//     const error = new Error("Email is already registered");
+//     error.status = 409;
+//     throw error;
+//   }
+  
+//   // Check if phone number already exists
+//   const existingPhoneUser = await UserLogin.findOne({ where: { phone_number: phoneNumber } });
+//   if (existingPhoneUser) {
+//     const error = new Error("Phone number is already registered");
+//     error.status = 409;
+//     throw error;
+//   }
+
+//   try {
+//     // Generate a new unique UID
+//     const uid = await generateNewUID();
+    
+//     // Generate a random temp pass
+//     const tempPassword = generateRandomPassword(6);
+    
+//     const hashedPassword = await bcrypt.hash(tempPassword, 10);
+  
+//     const newEvaluator = await UserLogin.create({
+//       name: name,
+//       email: email,
+//       phone_number: phoneNumber,
+//       uid: uid,
+//       pass: hashedPassword,
+//       role: "evaluator",
+//       active: true,
+//     });
+    
+//     // Send credentials via email
+//     try {
+//       await sendEvaluatorCredentials(name, email, uid, tempPassword);
+//       console.log(`Credentials sent to ${email} successfully`);
+//     } catch (emailError) {
+//       console.error("Failed to send credentials email:", emailError);
+//       // We don't throw here to avoid rolling back the user creation
+//       // Just log the error and continue
+//     }
+    
+//     return {
+//       success: true,
+//       uid: newEvaluator.uid,
+//       password: tempPassword, // Plain text password (only for initial display)
+//       name: newEvaluator.name,
+//       email: newEvaluator.email,
+//       emailSent: true
+//     };
+
+
+//   } catch (error) {
+//     console.error("Error registering evaluator:", error);
+//     const serviceError = new Error("Failed to register evaluator");
+//     serviceError.status = 500;
+//     serviceError.originalError = error;
+//     throw serviceError;
+//   }
+// };
 
 
 /**
@@ -1566,7 +1668,7 @@ const generateNewUID = async () => {
   try {
     // SQL Server compatible query
     const lastRecord = await UserLogin.findOne({
-      order: [['Uid', 'DESC']], // Simple ordering by UID
+      order: [['uid', 'DESC']], // Simple ordering by UID
       limit: 1,
     });
 
@@ -1574,7 +1676,7 @@ const generateNewUID = async () => {
 
     if (lastRecord) {
       // Extract the last UID and increment it
-      const lastUID = lastRecord.Uid;
+      const lastUID = lastRecord.uid;
       // Extract numeric part using JavaScript instead of SQL function
       const uidNumber = parseInt(lastUID.replace(/\D/g, '')); 
       newUID = `UID${String(uidNumber + 1).padStart(3, "0")}`; // Increment UID and format it

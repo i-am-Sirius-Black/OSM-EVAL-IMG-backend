@@ -8,8 +8,10 @@ import {
   SubjectData,
   CopyReevaluation,
   Copy,
+  ExamPapers,
 } from "../models/index.js";
 import { COPY_BATCH_EXPIRY } from "../config/config.js";
+import { raw } from "express";
 
 /**
  * Get all subjects assigned to an evaluator with isCopyAssigned flag
@@ -97,6 +99,17 @@ export const getCurrentActiveBatchService = async (
       raw: true,
     });
 
+    const paperId = await ExamPapers.findOne(
+      {
+        where: {subject_id: subjectCode},
+       attributes: ['paper_id'],
+       raw: true,
+      }
+    )
+
+    console.log("paperId for current batch:", paperId);
+    
+
     const checkedCount = allBatchCopies.filter((copy) => copy.is_checked).length;
     const pendingCount = allBatchCopies.filter((copy) => !copy.is_checked).length;
     const totalCount = allBatchCopies.length;
@@ -104,6 +117,7 @@ export const getCurrentActiveBatchService = async (
     return {
       batchId: activeBatch.batch_id,
       subjectCode: activeBatch.subject_code,
+      paperId: paperId ? paperId.paper_id : null,
       examName: activeBatch.exam_name,
       assignedAt: activeBatch.assigned_at,
       expiresAt: activeBatch.expires_at,
