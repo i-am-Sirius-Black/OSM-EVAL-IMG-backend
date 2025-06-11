@@ -82,8 +82,6 @@ router.post('/register-evaluator', registerEvaluator);
 
 router.post('/evaluator/assign-copies', assignCopies);
 
-
-
 router.get('/checked-copies/:packingId', getCheckedCopies);
 
 export default router;

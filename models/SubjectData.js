@@ -34,6 +34,11 @@ const defineSubjectData = (sequelize) => {
     PaperCode: {
       type: DataTypes.STRING(50),
       allowNull: true
+    },
+    IsPaperUploaded: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     }
   }, {
     tableName: "tbl_subjectdata",

@@ -1,3 +1,4 @@
+// Modified Questions.js model
 import { DataTypes } from 'sequelize';
 
 const defineQuestions = (sequelize) => {
@@ -21,6 +22,30 @@ const defineQuestions = (sequelize) => {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: false,
       },
+      // New fields for the enhanced question structure
+      has_parts: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+      },
+      parts_count: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      part_marks: {
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: true,
+      },
+      is_choice_based: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+      },
+      choice_attempt_count: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      }
+      // Removed choice_total_count
     },
     {
       tableName: "tbl_questions",

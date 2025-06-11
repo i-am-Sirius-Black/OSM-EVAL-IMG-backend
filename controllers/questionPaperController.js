@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { createExamPaper, getExamPapersForSubject, getPaperWithQuestions, deletePaper, createPaperWithoutQuestions, getAllPapers, addFragmentationToPaper, getPaperForFragmentation, getPaperWithQuestionsService, updatePaperFragmentation, deletePaperFragmentation } from '../services/questionPaperService.js';
-import { SubjectData } from '../models/index.js';
+import { ExamPapers, SubjectData } from '../models/index.js';
 
 // Configure storage for uploaded PDFs
 const storage = multer.diskStorage({
@@ -332,6 +332,8 @@ export const deleteFragmentation = async (req, res) => {
 //? New APIs for separated Fragmentation and Question Paper uploads
 
 
+
+
 /**
  * Create paper record without questions yet
  */
@@ -349,6 +351,18 @@ export const createPaper = async (req, res) => {
     // Validate required fields
     if (!subjectId || !paperCode || !maxMarks) {
       return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Check if a paper already exists for this subject
+    const existingPapers = await ExamPapers.findAll({
+      where: { subject_id: subjectId }
+    });
+
+    if (existingPapers && existingPapers.length > 0) {
+      return res.status(409).json({
+        message: 'A paper already exists for this subject',
+        existingPaper: existingPapers[0]
+      });
     }
 
     const paperData = {
@@ -369,7 +383,13 @@ export const createPaper = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating paper:', error);
-    return res.status(500).json({ message: 'Failed to create paper', error: error.message });
+    
+    // Return appropriate status code from the error if available
+    const statusCode = error.status || 500;
+    return res.status(statusCode).json({ 
+      message: error.message || 'Failed to create paper', 
+      error: error.message 
+    });
   }
 };
 
@@ -390,8 +410,11 @@ export const getPapers = async (req, res) => {
   }
 };
 
+
+
+
 /**
- * Add questions to paper and update fragmentation flag
+ * Add questions to paper using enhanced questions table
  */
 export const createFragmentation = async (req, res) => {
   try {
@@ -402,12 +425,13 @@ export const createFragmentation = async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Use service function
-    await addFragmentationToPaper(paperId, questions);
+    // Use service function with the updated signature
+    const result = await addFragmentationToPaper(paperId, questions);
     
     return res.status(201).json({
       message: 'Fragmentation created successfully',
-      paperId
+      paperId,
+      questionsCreated: result.questionsCreated
     });
   } catch (error) {
     console.error('Error creating fragmentation:', error);
@@ -418,6 +442,36 @@ export const createFragmentation = async (req, res) => {
     });
   }
 };
+
+
+// /**
+//  * Add questions to paper and update fragmentation flag
+//  */
+// export const createFragmentation = async (req, res) => {
+//   try {
+//     const { paperId, questions } = req.body;
+
+//     // Validate required fields
+//     if (!paperId || !questions) {
+//       return res.status(400).json({ message: 'Missing required fields' });
+//     }
+
+//     // Use service function
+//     await addFragmentationToPaper(paperId, questions);
+    
+//     return res.status(201).json({
+//       message: 'Fragmentation created successfully',
+//       paperId
+//     });
+//   } catch (error) {
+//     console.error('Error creating fragmentation:', error);
+//     const status = error.status || 500;
+//     return res.status(status).json({ 
+//       message: error.message || 'Failed to create fragmentation', 
+//       error: error.message 
+//     });
+//   }
+// };
 
 /**
  * Get paper details for fragmentation

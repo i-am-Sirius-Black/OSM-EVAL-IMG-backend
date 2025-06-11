@@ -26,18 +26,21 @@ export const getCourses = async () => {
  * @returns {Promise<Array>} List of subject objects with name and ID
  */
 export const getSubjectsForCourse = async (courseId) => {
+  
   if (!courseId) {
     const error = new Error("Course ID is required");
     error.status = 400;
     throw error;
   }
 
+  // Modified query to include IsPaperUploaded field
   const subjects = await SubjectData.findAll({
     where: { Course: courseId },
     attributes: [
       [sequelize.fn("DISTINCT", sequelize.col("Subject")), "subject"],
       [sequelize.col("SubjectID"), "subjectId"],
       [sequelize.col("packid"), "packId"],
+      [sequelize.col("IsPaperUploaded"), "isPaperUploaded"],
     ],
     raw: true,
   });
@@ -46,5 +49,6 @@ export const getSubjectsForCourse = async (courseId) => {
     subject: subject.subject,
     subjectId: subject.subjectId,
     packId: subject.packId,
+    isPaperUploaded: subject.isPaperUploaded || false, // Use lowercase for consistency in API response
   }));
 };

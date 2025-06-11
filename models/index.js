@@ -14,7 +14,6 @@ import defineCopy from './Copy.js';
 import defineExamPapers from './ExamPapers.js';
 import defineUserProfile from './UserProfile.js';
 
-
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
 export const CopyEval = defineCopyEval(sequelize);
@@ -30,6 +29,7 @@ export const Copy = defineCopy(sequelize);
 export const Scanning = defineScanning(sequelize);
 export const ExamPapers = defineExamPapers(sequelize);
 export const UserProfile = defineUserProfile(sequelize);
+
 
 export const setupAssociations = () => {
   // tbl_copies <-> tbl_subjectdata (Many copies belong to one subjectdata)
@@ -144,6 +144,7 @@ Questions.belongsTo(ExamPapers, {
   foreignKey: 'paper_id',
   as: 'paper'
 });
+
 
 
 

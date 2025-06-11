@@ -1,8 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import { sequelize } from '../config/db.js';
 import { ExamPapers, Questions, SubjectData } from '../models/index.js';
-import { log } from 'console';
 
 
 
@@ -186,7 +184,45 @@ export const getExamPapersForSubject = async (subjectId) => {
   }));
 };
 
-/**
+// /**
+//  * Get paper details with questions (keeping structure but removing subject data)
+//  */
+// export const getPaperWithQuestions = async (paperId) => {
+//   const paper = await ExamPapers.findByPk(paperId);
+
+//   if (!paper) {
+//     const error = new Error('Paper not found');
+//     error.status = 404;
+//     throw error;
+//   }
+
+//   // Get all questions for this paper
+//   const questions = await Questions.findAll({
+//     where: { paper_id: paperId },
+//     order: [['q_no', 'ASC']]
+//   });
+
+//   // Format questions
+//   const formattedQuestions = questions.map(q => ({
+//     sno: q.sno,
+//     qNo: q.q_no,
+//     maxMark: q.max_mark
+//   }));
+
+//   return {
+//     paperId: paper.paper_id,
+//     paperCode: paper.paper_code,
+//     examDate: paper.exam_date,
+//     title: paper.title,
+//     maxMarks: paper.max_marks,
+//     durationMinutes: paper.duration_minutes,
+//     filePath: paper.file_path,
+//     questions: formattedQuestions
+//   };
+// };
+
+
+/**v-2
  * Get paper details with questions (keeping structure but removing subject data)
  */
 export const getPaperWithQuestions = async (paperId) => {
@@ -204,11 +240,16 @@ export const getPaperWithQuestions = async (paperId) => {
     order: [['q_no', 'ASC']]
   });
 
-  // Format questions
+  // Format questions with additional properties for parts and choice-based questions
   const formattedQuestions = questions.map(q => ({
     sno: q.sno,
     qNo: q.q_no,
-    maxMark: q.max_mark
+    maxMark: q.max_mark,
+    hasParts: q.has_parts || false,
+    partsCount: q.parts_count || 0,
+    partMarks: q.part_marks || null,
+    isChoiceBased: q.is_choice_based || false,
+    choiceAttemptCount: q.choice_attempt_count || 0
   }));
 
   return {
@@ -286,11 +327,23 @@ export const deletePaper = async (paperId) => {
 
 //?New Service as per separate fragmentation tabs
 
+
 /**
  * Create a paper without questions (for separate fragmentation)
  */
 export const createPaperWithoutQuestions = async (paperData) => {
   try {
+    // First check if a paper already exists for this subject
+    const existingPaper = await ExamPapers.findOne({
+      where: { subject_id: paperData.subjectId }
+    });
+
+    if (existingPaper) {
+      const error = new Error('A paper already exists for this subject');
+      error.status = 409; // Conflict status code
+      throw error;
+    }
+
     const examPaper = await ExamPapers.create({
       subject_id: paperData.subjectId,
       paper_code: paperData.paperCode,
@@ -299,6 +352,16 @@ export const createPaperWithoutQuestions = async (paperData) => {
       file_path: paperData.filePath,
       fragmentation: paperData.fragmentation || false
     });
+
+    // Update the SubjectData table with IsPaperUploaded flag
+    await SubjectData.update(
+      { IsPaperUploaded: true },
+      {
+        where: {
+          SubjectID: paperData.subjectId
+        }
+      }
+    );
     
     return examPaper;
   } catch (error) {
@@ -306,6 +369,34 @@ export const createPaperWithoutQuestions = async (paperData) => {
     throw error;
   }
 };
+
+
+// /**
+//  * Create a paper without questions (for separate fragmentation)
+//  */
+// export const createPaperWithoutQuestions = async (paperData) => {
+//   try {
+//     const examPaper = await ExamPapers.create({
+//       subject_id: paperData.subjectId,
+//       paper_code: paperData.paperCode,
+//       title: paperData.title,
+//       max_marks: paperData.maxMarks,
+//       file_path: paperData.filePath,
+//       fragmentation: paperData.fragmentation || false
+//     });
+
+//     await SubjectData.update({ is_paper_uploaded: true }, {
+//       where: {
+//         SubjectID: paperData.subjectId
+//       }
+//     });
+    
+//     return examPaper;
+//   } catch (error) {
+//     console.error('Error creating paper in service:', error);
+//     throw error;
+//   }
+// };
 
 /**
  * Get all papers with optional filtering for unfragmented papers
@@ -346,11 +437,12 @@ export const getAllPapers = async (filterUnfragmented = false) => {
   }
 };
 
+
 /**
- * Add question structure to paper and update fragmentation flag
+ * Add question structure to paper using enhanced questions table
  */
 export const addFragmentationToPaper = async (paperId, questions) => {
-  let transaction;
+  let transaction = null;
   
   try {
     transaction = await sequelize.transaction();
@@ -363,11 +455,17 @@ export const addFragmentationToPaper = async (paperId, questions) => {
       throw error;
     }
     
-    // Create question records
+    // Create question records directly - the frontend now sends data in the right format
     const questionsToCreate = questions.map(q => ({
       paper_id: paperId,
-      q_no: q.questionNumber,
-      max_mark: q.maxMarks
+      q_no: q.q_no,
+      max_mark: parseFloat(q.max_mark) || 0,
+      has_parts: q.has_parts || false,
+      parts_count: q.parts_count || null,
+      part_marks: q.part_marks || null,
+      is_choice_based: q.is_choice_based || false,
+      choice_attempt_count: q.choice_attempt_count || null
+      // No need for choice_total_count
     }));
 
     await Questions.bulkCreate(questionsToCreate, { transaction });
@@ -377,15 +475,67 @@ export const addFragmentationToPaper = async (paperId, questions) => {
 
     await transaction.commit();
     
-    return paper;
+    return {
+      paper,
+      questionsCreated: questionsToCreate.length
+    };
+    
   } catch (error) {
-    if (transaction) {
-      await transaction.rollback();
+    console.error('Error in addFragmentationToPaper:', error);
+    
+    if (transaction && !transaction.finished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+      }
     }
-    console.error('Error adding fragmentation in service:', error);
+    
     throw error;
   }
 };
+
+
+// /**
+//  * Add question structure to paper and update fragmentation flag
+//  */
+// export const addFragmentationToPaper = async (paperId, questions) => {
+//   let transaction;
+  
+//   try {
+//     transaction = await sequelize.transaction();
+    
+//     // Get the paper to verify it exists
+//     const paper = await ExamPapers.findByPk(paperId);
+//     if (!paper) {
+//       const error = new Error('Paper not found');
+//       error.status = 404;
+//       throw error;
+//     }
+    
+//     // Create question records
+//     const questionsToCreate = questions.map(q => ({
+//       paper_id: paperId,
+//       q_no: q.questionNumber,
+//       max_mark: q.maxMarks
+//     }));
+
+//     await Questions.bulkCreate(questionsToCreate, { transaction });
+    
+//     // Update fragmentation flag
+//     await paper.update({ fragmentation: true }, { transaction });
+
+//     await transaction.commit();
+    
+//     return paper;
+//   } catch (error) {
+//     if (transaction) {
+//       await transaction.rollback();
+//     }
+//     console.error('Error adding fragmentation in service:', error);
+//     throw error;
+//   }
+// };
 
 /**
  * Get paper details by ID for fragmentation (simpler version for UI display)
@@ -479,6 +629,8 @@ export const getPaperWithQuestionsService = async (paperId) => {
   }
 };
 
+
+
 /**
  * Update paper fragmentation
  */
@@ -502,11 +654,16 @@ export const updatePaperFragmentation = async (paperId, questions) => {
       transaction
     });
     
-    // Create new question records
+    // Create new question records with the enhanced schema
     const questionsToCreate = questions.map(q => ({
       paper_id: paperId,
       q_no: q.questionNumber,
-      max_mark: q.maxMarks
+      max_mark: parseFloat(q.maxMarks) || 0,
+      has_parts: q.has_parts || false,
+      parts_count: q.parts_count || null,
+      part_marks: q.part_marks || null,
+      is_choice_based: q.is_choice_based || false,
+      choice_attempt_count: q.choice_attempt_count || null
     }));
 
     await Questions.bulkCreate(questionsToCreate, { transaction });
@@ -522,6 +679,49 @@ export const updatePaperFragmentation = async (paperId, questions) => {
     throw error;
   }
 };
+// /**
+//  * Update paper fragmentation
+//  */
+// export const updatePaperFragmentation = async (paperId, questions) => {
+//   let transaction;
+  
+//   try {
+//     transaction = await sequelize.transaction();
+    
+//     // Get the paper to verify it exists
+//     const paper = await ExamPapers.findByPk(paperId);
+//     if (!paper) {
+//       const error = new Error('Paper not found');
+//       error.status = 404;
+//       throw error;
+//     }
+    
+//     // Delete existing questions
+//     await Questions.destroy({
+//       where: { paper_id: paperId },
+//       transaction
+//     });
+    
+//     // Create new question records
+//     const questionsToCreate = questions.map(q => ({
+//       paper_id: paperId,
+//       q_no: q.questionNumber,
+//       max_mark: q.maxMarks
+//     }));
+
+//     await Questions.bulkCreate(questionsToCreate, { transaction });
+    
+//     await transaction.commit();
+    
+//     return paper;
+//   } catch (error) {
+//     if (transaction) {
+//       await transaction.rollback();
+//     }
+//     console.error('Error updating fragmentation:', error);
+//     throw error;
+//   }
+// };
 
 /**
  * Delete paper fragmentation
