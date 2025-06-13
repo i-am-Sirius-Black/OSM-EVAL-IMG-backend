@@ -5,26 +5,37 @@ import fs from 'fs';
 import { createExamPaper, getExamPapersForSubject, getPaperWithQuestions, deletePaper, createPaperWithoutQuestions, getAllPapers, addFragmentationToPaper, getPaperForFragmentation, getPaperWithQuestionsService, updatePaperFragmentation, deletePaperFragmentation } from '../services/questionPaperService.js';
 import { ExamPapers, SubjectData } from '../models/index.js';
 
-// Configure storage for uploaded PDFs
+
+/**
+ * ✅ Configure Multer Storage for Uploaded PDFs
+ * --------------------------------------------
+ * We configure the destination where uploaded files will be saved.
+ * For the filename, we use a temporary name first, and later rename it in the controller
+ * because fields like `paperCode` and `subjectId` are not available during `filename()` execution.
+ */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'papers');
-    
-    // Create directory if it doesn't exist
+
+    // ✅ Create the 'uploads/papers' directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
-    
+
     cb(null, uploadDir);
   },
+
   filename: (req, file, cb) => {
+    // ❗ Use a temporary name, since `req.body.paperCode` is not available yet
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    cb(null, `paper-${req.body.subjectId}-${req.body.paperCode}-${uniqueSuffix}${ext}`);
+    cb(null, `temp-${uniqueSuffix}${ext}`); // We'll rename this in the controller
   }
 });
 
-// Filter for PDFs only
+/**
+ * ✅ Filter to Allow Only PDF Files
+ */
 const fileFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') {
     cb(null, true);
@@ -33,6 +44,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+/**
+ * ✅ Export Multer Middleware with Config
+ */
 export const upload = multer({ 
   storage, 
   fileFilter,
@@ -40,7 +54,10 @@ export const upload = multer({
 });
 
 /**
- * Upload a question paper PDF
+ * ✅ Controller: Handle PDF Upload and Rename File with Paper Metadata
+ * --------------------------------------------------------------------
+ * After the file is uploaded, we now have access to `req.body.paperCode` and `subjectId`,
+ * so we rename the file to include this info for better file tracking.
  */
 export const uploadQuestionPaper = async (req, res) => {
   try {
@@ -48,13 +65,29 @@ export const uploadQuestionPaper = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Return the file path to be saved in the database
-    const filePath = req.file.path.replace(/\\/g, '/');
-    
+    const { paperCode, subjectId } = req.body;
+
+    if (!paperCode || !subjectId) {
+      return res.status(400).json({ message: 'Missing paperCode or subjectId' });
+    }
+
+    // Build new filename with metadata
+    const ext = path.extname(req.file.originalname);
+    const newFileName = `paper-${subjectId}-${paperCode}-${Date.now()}${ext}`;
+
+    // Build full path
+    const uploadDir = path.join(process.cwd(), 'uploads', 'papers');
+    const newPath = path.join(uploadDir, newFileName);
+
+    // ✅ Rename the file (from temp to meaningful name)
+    fs.renameSync(req.file.path, newPath);
+
+    // ✅ Send the new file path back to the client (for DB saving)
     return res.status(200).json({
       message: 'File uploaded successfully',
-      filePath
+      filePath: newPath.replace(/\\/g, '/') // Normalize Windows paths
     });
+
   } catch (error) {
     console.error('Error uploading question paper:', error);
     return res.status(500).json({ message: 'Failed to upload file', error: error.message });
@@ -62,28 +95,34 @@ export const uploadQuestionPaper = async (req, res) => {
 };
 
 
-
+/**
+ * Create a new exam paper record with questions
+ */
 export const createExamPaperController = async (req, res) => {
   try {
     const {
       subjectId,
       paperCode,
+      examDate,
       title,
       maxMarks,
+      durationMinutes,
       filePath,
       questions
     } = req.body;
 
     // Validate required fields
-    if (!subjectId || !paperCode || !maxMarks || !questions) {
+    if (!subjectId || !paperCode || !examDate || !maxMarks || !questions) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
     const paperData = {
       subjectId,
       paperCode,
+      examDate,
       title,
       maxMarks,
+      durationMinutes,
       filePath
     };
 
@@ -98,49 +137,6 @@ export const createExamPaperController = async (req, res) => {
     return res.status(500).json({ message: 'Failed to create exam paper', error: error.message });
   }
 };
-
-// /**
-//  * Create a new exam paper record with questions
-//  */
-// export const createExamPaperController = async (req, res) => {
-//   try {
-//     const {
-//       subjectId,
-//       paperCode,
-//       examDate,
-//       title,
-//       maxMarks,
-//       durationMinutes,
-//       filePath,
-//       questions
-//     } = req.body;
-
-//     // Validate required fields
-//     if (!subjectId || !paperCode || !examDate || !maxMarks || !questions) {
-//       return res.status(400).json({ message: 'Missing required fields' });
-//     }
-
-//     const paperData = {
-//       subjectId,
-//       paperCode,
-//       examDate,
-//       title,
-//       maxMarks,
-//       durationMinutes,
-//       filePath
-//     };
-
-//     const examPaper = await createExamPaper(paperData, questions);
-
-//     return res.status(201).json({
-//       message: 'Exam paper created successfully',
-//       paperId: examPaper.paper_id
-//     });
-//   } catch (error) {
-//     console.error('Error creating exam paper:', error);
-//     return res.status(500).json({ message: 'Failed to create exam paper', error: error.message });
-//   }
-// };
 
 /**
  * Get all subjects for dropdown
@@ -493,3 +489,13 @@ export const getPaperForFragmentationController = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+

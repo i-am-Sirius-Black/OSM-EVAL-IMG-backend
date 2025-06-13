@@ -13,6 +13,7 @@ import defineReevaluationRequest from './CopyReevaluation.js';
 import defineCopy from './Copy.js';
 import defineExamPapers from './ExamPapers.js';
 import defineUserProfile from './UserProfile.js';
+import defineQuestionImages from './QuestionImages.js';
 
 // Initialize Export DB models
 export const UserLogin = defineUserLogin(sequelize);
@@ -29,6 +30,7 @@ export const Copy = defineCopy(sequelize);
 export const Scanning = defineScanning(sequelize);
 export const ExamPapers = defineExamPapers(sequelize);
 export const UserProfile = defineUserProfile(sequelize);
+export const QuestionImages = defineQuestionImages(sequelize);
 
 
 export const setupAssociations = () => {
@@ -141,6 +143,18 @@ ExamPapers.hasMany(Questions, {
 });
 
 Questions.belongsTo(ExamPapers, {
+  foreignKey: 'paper_id',
+  as: 'paper'
+});
+
+
+// Associate ExamPapers with QuestionImages
+ExamPapers.hasMany(QuestionImages, { 
+  foreignKey: 'paper_id', 
+  as: 'questionImages' 
+});
+
+QuestionImages.belongsTo(ExamPapers, {
   foreignKey: 'paper_id',
   as: 'paper'
 });
